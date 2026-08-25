@@ -16,6 +16,8 @@ PostgreSQL.
   enforced from first login via Filament's built-in multi-factor auth
   (works with Bitwarden's built-in authenticator, Google Authenticator, or
   any TOTP app) — includes recovery codes.
+- **MCP server** for AI clients (Claude, Cursor, etc.) to add/edit/delete/
+  list fuel entries directly — see "AI client access (MCP)" below.
 
 ## Local development (DDEV)
 
@@ -61,6 +63,27 @@ Fix code style:
 ```bash
 ddev exec vendor/bin/pint
 ```
+
+## AI client access (MCP)
+
+The app exposes an [MCP](https://modelcontextprotocol.io) server at
+`/mcp/fuel-history`, authenticated with a Laravel Sanctum bearer token.
+
+1. In the panel, go to **API Access** (left nav), click **Generate token**,
+   and give it a name (e.g. "Claude Desktop"). The plaintext token is shown
+   **once**, in a notification that stays open — copy it immediately, it
+   cannot be retrieved again (Sanctum only ever stores its hash).
+2. Add a remote MCP server to your client's config, pointing at
+   `https://<your-domain>/mcp/fuel-history` with header
+   `Authorization: Bearer <token>`. Both Claude and Cursor support remote
+   MCP servers with a custom header this way; Gemini's support for that is
+   less certain as of writing.
+3. Tools available: `list-cars`, `list-fuel-entries`, `add-fuel-entry`,
+   `edit-fuel-entry`, `delete-fuel-entry`. Editing/deleting is restricted to
+   the entry's owner or an admin — the same `FuelEntryPolicy` the Filament
+   panel itself uses, not separate logic.
+
+Revoke a token any time from the same **API Access** page.
 
 ## Architecture notes
 
