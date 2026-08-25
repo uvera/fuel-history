@@ -1,58 +1,79 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Fuel History
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A self-hosted fuel-tracking app for a household/small team's cars, built on
+Laravel + [Filament](https://filamentphp.com) (admin-panel framework), with
+PostgreSQL.
 
-## About Laravel
+- Admins manage the car list (add/edit/archive — cars are never hard-deleted).
+- Any logged-in user (admin or regular) can log fuel fill-ups against any car.
+- Per-car fuel history table shows computed comparison columns: price/litre,
+  km since the previous fill, and L/100km — both an "accurate" figure from
+  full-tank-to-full-tank stretches and a separate trip-computer-based
+  estimate for partial fills, visually distinguished from each other.
+- Analytics (spend, volume, efficiency) per car and summed across all cars,
+  bucketed by month/quarter/year.
+- Login requires password + **mandatory TOTP two-factor authentication**,
+  enforced from first login via Filament's built-in multi-factor auth
+  (works with Bitwarden's built-in authenticator, Google Authenticator, or
+  any TOTP app) — includes recovery codes.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Local development (DDEV)
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Requires [DDEV](https://ddev.com) and Docker.
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+ddev start
+ddev composer install
+cp .env.example .env
+ddev artisan key:generate
+ddev artisan migrate
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Optionally bootstrap an admin account on first `db:seed` by setting
+`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` in `.env` first:
 
-## Contributing
+```bash
+ddev artisan db:seed
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Then visit the panel (`ddev launch /admin`) and log in — you'll be forced
+through TOTP enrollment (scan the QR code with an authenticator app) before
+you can do anything else.
 
-## Code of Conduct
+Run tests:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+ddev artisan test
+```
 
-## Security Vulnerabilities
+Fix code style:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+ddev exec vendor/bin/pint
+```
 
-## License
+## Architecture notes
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- **Database:** PostgreSQL only (not SQLite) — the test suite uses an
+  in-memory SQLite connection for speed (see `phpunit.xml`), so any
+  Postgres-specific SQL (e.g. the `CHECK` constraints in the `fuel_entries`
+  migration) is guarded to only run against the `pgsql` driver.
+- **Virtual columns / analytics:** `App\Services\FuelStretchService` is a
+  pure, DB-free PHP forward pass over a car's chronologically ordered fuel
+  entries — the single source of truth for what counts as a closed
+  "full tank to full tank" stretch. `App\Services\AnalyticsService` reuses
+  it for period bucketing, so the fuel-history table and analytics can
+  never disagree with each other. See the extensive unit test suites for
+  both (`tests/Unit/FuelStretchServiceTest.php`,
+  `tests/Unit/AnalyticsServiceTest.php`) for the exact behavior contract.
+- **Authorization:** `CarPolicy` (admin-only mutation) and
+  `FuelEntryPolicy` (owner-or-admin edit/delete, any authenticated user can
+  create) — Filament Resources pick these up automatically via Laravel's
+  policy auto-discovery.
+
+## Deployment
+
+Not yet wired into production infrastructure. When that happens, it'll be a
+separate, deliberate piece of work — this app was rebuilt from an earlier
+Go implementation partway through this project, and the same
+deploy-later-as-a-dedicated-step approach carries forward.
