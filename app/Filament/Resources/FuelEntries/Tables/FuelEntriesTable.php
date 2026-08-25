@@ -21,6 +21,13 @@ class FuelEntriesTable
                 TextColumn::make('car.name')
                     ->label('Car')
                     ->sortable(),
+                TextColumn::make('fuel_type')
+                    ->label('Fuel')
+                    ->badge()
+                    ->placeholder('—'),
+                TextColumn::make('fuel_variant')
+                    ->label('Variant')
+                    ->placeholder('—'),
                 TextColumn::make('gas_station')
                     ->searchable(),
                 TextColumn::make('litres_filled')

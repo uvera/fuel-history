@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Enums\FuelType;
 use App\Models\FuelEntry;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
@@ -12,12 +13,16 @@ use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 
 #[Name('add-fuel-entry')]
-#[Description('Logs a fuel fill-up for a car. Use list-cars first to find the car_id. Currency is always RSD. Set is_partial_fill=true and optionally trip_km (kilometres since the last fill, from the car\'s trip computer) when the tank was not filled to full.')]
+#[Description('Logs a fuel fill-up for a car. Use list-cars first to find the car_id. Currency is always RSD. fuel_variant is required unless fuel_type is electric. Set is_partial_fill=true and optionally trip_km (kilometres since the last fill, from the car\'s trip computer) when the tank was not filled to full.')]
 class AddFuelEntryTool extends Tool
 {
     public function handle(Request $request): Response
     {
         $validated = $request->validate(FuelEntry::validationRules());
+
+        if (($validated['fuel_variant'] ?? null) === '') {
+            $validated['fuel_variant'] = null;
+        }
 
         $entry = FuelEntry::create([
             ...$validated,
@@ -41,6 +46,12 @@ class AddFuelEntryTool extends Tool
             'car_id' => $schema->integer()
                 ->description('The car to log this fill-up against. Use list-cars to look this up.')
                 ->required(),
+            'fuel_type' => $schema->string()
+                ->enum(FuelType::class)
+                ->description('One of: gasoline, diesel, lpg, electric.')
+                ->required(),
+            'fuel_variant' => $schema->string()
+                ->description('The specific grade or product, e.g. "95", "98", "B7", "Shell V-Power". Required unless fuel_type is electric.'),
             'gas_station' => $schema->string()
                 ->description('Name of the gas station.')
                 ->required(),
