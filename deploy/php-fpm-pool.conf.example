@@ -1,0 +1,29 @@
+; Example PHP-FPM pool for this app, running as its own dedicated system
+; user rather than the distro-default www-data pool. Adjust the paths and
+; user/group to match how the app was actually provisioned on the host,
+; and drop this in /etc/php/8.3/fpm/pool.d/fuel-history.conf (path varies
+; by PHP version/distro).
+
+[fuel-history]
+user = fuel-history
+group = fuel-history
+
+; Unix socket is preferred over TCP for a single-host deploy -- faster and
+; doesn't need a firewall rule. Must match the `unix/...` path used by the
+; php_fastcgi directive in Caddyfile.example.
+listen = /run/php/fuel-history.sock
+listen.owner = fuel-history
+listen.group = www-data
+listen.mode = 0660
+
+pm = dynamic
+pm.max_children = 8
+pm.start_servers = 2
+pm.min_spare_servers = 1
+pm.max_spare_servers = 4
+
+; Laravel reads these from the environment when FPM's clear_env is off;
+; simplest is to keep configuration entirely in the app's own .env file
+; (which Laravel already loads) and leave FPM's env passthrough alone.
+php_admin_value[error_log] = /var/log/php-fpm/fuel-history-error.log
+php_admin_flag[log_errors] = on

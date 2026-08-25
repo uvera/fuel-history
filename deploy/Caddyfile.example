@@ -1,0 +1,14 @@
+# Example Caddy site block for this app. Adjust the domain and the
+# PHP-FPM socket path to match the host, then drop it in Caddy's site
+# config (e.g. /etc/caddy/sites/fuel-history.caddy, or inline in the main
+# Caddyfile depending on how Caddy is provisioned on the host).
+
+fuel-history.example.com {
+    root * /opt/fuel-history/public
+
+    # Must match `listen` in php-fpm-pool.conf.example.
+    php_fastcgi unix//run/php/fuel-history.sock
+
+    encode zstd gzip
+    file_server
+}

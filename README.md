@@ -106,7 +106,7 @@ Revoke a token any time from the same **API Access** page.
 
 ## Deployment
 
-Not yet wired into production infrastructure. When that happens, it'll be a
-separate, deliberate piece of work — this app was rebuilt from an earlier
-Go implementation partway through this project, and the same
-deploy-later-as-a-dedicated-step approach carries forward.
+Runs natively, no Docker required in production — PHP-FPM + a reverse
+proxy + PostgreSQL, with no Node/npm build step (Filament ships its own
+pre-built assets). See [`deploy/README.md`](deploy/README.md) for the full
+setup (config templates for PHP-FPM and Caddy, and the deploy script).
