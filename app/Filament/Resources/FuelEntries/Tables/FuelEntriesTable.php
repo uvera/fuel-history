@@ -23,7 +23,8 @@ class FuelEntriesTable
                     ->sortable(),
                 TextColumn::make('fuel_type')
                     ->label('Fuel')
-                    ->badge(),
+                    ->badge()
+                    ->placeholder('—'),
                 TextColumn::make('fuel_variant')
                     ->label('Variant')
                     ->placeholder('—'),

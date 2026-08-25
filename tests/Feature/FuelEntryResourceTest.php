@@ -6,10 +6,12 @@ use App\Enums\FuelType;
 use App\Filament\Resources\FuelEntries\FuelEntryResource;
 use App\Filament\Resources\FuelEntries\Pages\CreateFuelEntry;
 use App\Filament\Resources\FuelEntries\Pages\EditFuelEntry;
+use App\Filament\Resources\FuelEntries\Pages\ListFuelEntries;
 use App\Models\Car;
 use App\Models\FuelEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -187,5 +189,37 @@ class FuelEntryResourceTest extends TestCase
         $entry = FuelEntry::firstOrFail();
         $this->assertSame(FuelType::Electric, $entry->fuel_type);
         $this->assertNull($entry->fuel_variant);
+    }
+
+    public function test_the_list_page_renders_a_legacy_entry_with_null_fuel_type_and_variant(): void
+    {
+        $car = Car::factory()->create();
+        $user = $this->user();
+
+        // Raw insert bypassing the model/validation layer entirely --
+        // mirrors FuelEntryValidationRulesTest, since the factory always
+        // produces valid fuel_type/fuel_variant now.
+        DB::table('fuel_entries')->insert([
+            'car_id' => $car->id,
+            'user_id' => $user->id,
+            'fuel_type' => null,
+            'fuel_variant' => null,
+            'gas_station' => 'Legacy Station',
+            'litres_filled' => 10,
+            'amount' => 1000,
+            'odometer_at_fill' => 500,
+            'date_of_filling' => now(),
+            'is_partial_fill' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+
+        $this->get(FuelEntryResource::getUrl('index'))->assertOk();
+
+        Livewire::test(ListFuelEntries::class)
+            ->assertOk()
+            ->assertSee('Legacy Station');
     }
 }

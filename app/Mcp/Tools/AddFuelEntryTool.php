@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Enums\FuelType;
 use App\Models\FuelEntry;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
@@ -18,6 +19,10 @@ class AddFuelEntryTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate(FuelEntry::validationRules());
+
+        if (($validated['fuel_variant'] ?? null) === '') {
+            $validated['fuel_variant'] = null;
+        }
 
         $entry = FuelEntry::create([
             ...$validated,
@@ -42,6 +47,7 @@ class AddFuelEntryTool extends Tool
                 ->description('The car to log this fill-up against. Use list-cars to look this up.')
                 ->required(),
             'fuel_type' => $schema->string()
+                ->enum(FuelType::class)
                 ->description('One of: gasoline, diesel, lpg, electric.')
                 ->required(),
             'fuel_variant' => $schema->string()

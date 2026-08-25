@@ -31,9 +31,7 @@ class FuelEntryForm
                     ->label('Fuel variant')
                     ->helperText('The specific grade or product, e.g. "95", "B7", "Shell V-Power".')
                     ->maxLength(255)
-                    ->required(fn (Get $get): bool => ($get('fuel_type') instanceof FuelType
-                        ? $get('fuel_type')->value
-                        : $get('fuel_type')) !== FuelType::Electric->value),
+                    ->required(fn (Get $get): bool => $get->enum('fuel_type', FuelType::class, isNullable: true) !== FuelType::Electric),
                 TextInput::make('gas_station')
                     ->required()
                     ->maxLength(255),

@@ -7,6 +7,7 @@ use App\Models\Car;
 use App\Models\FuelEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -35,6 +36,30 @@ class McpFuelHistoryServerTest extends TestCase
     private function toolText(TestResponse $response): string
     {
         return $response->json('result.content.0.text');
+    }
+
+    /**
+     * Raw-inserts a legacy fuel entry with fuel_type/fuel_variant both NULL,
+     * bypassing the model/validation layer entirely -- mirrors
+     * FuelEntryValidationRulesTest::test_fuel_type_and_fuel_variant_columns_are_nullable_in_the_database,
+     * since the factory always produces valid fuel_type/fuel_variant now.
+     */
+    private function createLegacyEntryWithoutFuelType(User $user, Car $car): int
+    {
+        return DB::table('fuel_entries')->insertGetId([
+            'car_id' => $car->id,
+            'user_id' => $user->id,
+            'fuel_type' => null,
+            'fuel_variant' => null,
+            'gas_station' => 'Legacy Station',
+            'litres_filled' => 10,
+            'amount' => 1000,
+            'odometer_at_fill' => 500,
+            'date_of_filling' => now(),
+            'is_partial_fill' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     public function test_unauthenticated_request_is_rejected(): void
@@ -305,6 +330,62 @@ class McpFuelHistoryServerTest extends TestCase
         $this->assertFalse((bool) $response->json('result.isError'));
         $this->assertSame(FuelType::Gasoline, $entry->refresh()->fuel_type);
         $this->assertSame('B7', $entry->fuel_variant);
+    }
+
+    public function test_edit_fuel_entry_rejects_setting_fuel_type_on_a_legacy_entry_without_a_fuel_variant(): void
+    {
+        $user = User::factory()->create();
+        $token = $this->tokenFor($user);
+        $car = Car::factory()->create();
+        $entryId = $this->createLegacyEntryWithoutFuelType($user, $car);
+
+        $response = $this->callTool($token, 'edit-fuel-entry', [
+            'entry_id' => $entryId,
+            'fuel_type' => 'diesel',
+        ]);
+
+        $this->assertTrue((bool) $response->json('result.isError'));
+        $entry = FuelEntry::find($entryId);
+        $this->assertNull($entry->fuel_type);
+        $this->assertNull($entry->fuel_variant);
+    }
+
+    public function test_edit_fuel_entry_rejects_explicit_null_fuel_variant_alongside_non_electric_fuel_type(): void
+    {
+        $user = User::factory()->create();
+        $token = $this->tokenFor($user);
+        $entry = FuelEntry::factory()->create(['user_id' => $user->id, 'fuel_type' => FuelType::Diesel, 'fuel_variant' => 'B7']);
+
+        $response = $this->callTool($token, 'edit-fuel-entry', [
+            'entry_id' => $entry->id,
+            'fuel_type' => 'diesel',
+            'fuel_variant' => null,
+        ]);
+
+        $this->assertTrue((bool) $response->json('result.isError'));
+        $entry->refresh();
+        $this->assertSame(FuelType::Diesel, $entry->fuel_type);
+        $this->assertSame('B7', $entry->fuel_variant);
+    }
+
+    public function test_edit_fuel_entry_allows_unrelated_edit_on_legacy_entry_without_touching_fuel_type(): void
+    {
+        $user = User::factory()->create();
+        $token = $this->tokenFor($user);
+        $car = Car::factory()->create();
+        $entryId = $this->createLegacyEntryWithoutFuelType($user, $car);
+
+        $response = $this->callTool($token, 'edit-fuel-entry', [
+            'entry_id' => $entryId,
+            'gas_station' => 'Updated Legacy Station',
+        ]);
+
+        $response->assertOk();
+        $this->assertFalse((bool) $response->json('result.isError'));
+        $entry = FuelEntry::find($entryId);
+        $this->assertSame('Updated Legacy Station', $entry->gas_station);
+        $this->assertNull($entry->fuel_type);
+        $this->assertNull($entry->fuel_variant);
     }
 
     public function test_list_fuel_entries_includes_fuel_type_and_variant(): void
