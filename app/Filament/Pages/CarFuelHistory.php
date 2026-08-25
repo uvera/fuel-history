@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\Car;
 use App\Services\AnalyticsPeriod;
 use App\Services\AnalyticsService;
+use App\Services\Data\CarFuelSummary;
 use App\Services\Data\FuelEntryRow;
 use App\Services\FuelStretchService;
 use BackedEnum;
@@ -60,6 +61,13 @@ class CarFuelHistory extends Page implements HasTable
                 'avgL100km' => $bucket->averageL100km(),
             ])
             ->all();
+    }
+
+    public function getAllTimeSummaryProperty(): CarFuelSummary
+    {
+        $entries = $this->record->fuelEntries()->with('user')->get();
+
+        return app(AnalyticsService::class)->allTimeSummaryForCar($entries);
     }
 
     public function table(Table $table): Table

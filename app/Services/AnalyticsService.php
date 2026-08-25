@@ -4,7 +4,11 @@ namespace App\Services;
 
 use App\Models\FuelEntry;
 use App\Services\Data\AnalyticsBucket;
+use App\Services\Data\CarFuelSummary;
+use App\Services\Data\FuelEntryRow;
 use App\Services\Data\FuelStretch;
+use App\Services\Data\FuelTypeBreakdown;
+use App\Services\Data\StationBreakdown;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -58,6 +62,101 @@ class AnalyticsService
         }
 
         return $merged->sortKeys()->values();
+    }
+
+    /**
+     * All-time summary for one car, reusing the same FuelStretchService
+     * output the period-bucketed table draws from, so totals/efficiency
+     * can never disagree with that view.
+     *
+     * @param  Collection<int, FuelEntry>  $entries  All of ONE car's entries.
+     */
+    public function allTimeSummaryForCar(Collection $entries): CarFuelSummary
+    {
+        $result = $this->stretchService->compute($entries);
+        $rows = $result->rows;
+        $stretches = $result->stretches;
+
+        $totalAmount = (float) $rows->sum(fn ($row) => (float) $row->entry->amount);
+        $totalLitres = (float) $rows->sum(fn ($row) => (float) $row->entry->litres_filled);
+        $totalKm = (int) $rows->sum(fn ($row) => $row->kmSincePrevious ?? 0);
+        $fillUpCount = $rows->count();
+
+        $averageL100km = $stretches->isEmpty()
+            ? null
+            : $stretches->sum(fn ($stretch) => $stretch->l100km) / $stretches->count();
+
+        $costPerKm = $totalKm > 0 ? $totalAmount / $totalKm : null;
+        $averagePricePerLitre = $totalLitres > 0 ? $totalAmount / $totalLitres : 0.0;
+
+        $priced = $rows->filter(fn ($row) => (float) $row->entry->litres_filled > 0);
+        $cheapestFillUp = $priced->sortBy('pricePerLitre')->first();
+        $priciestFillUp = $priced->sortByDesc('pricePerLitre')->first();
+
+        return new CarFuelSummary(
+            $totalAmount,
+            $totalLitres,
+            $totalKm,
+            $averageL100km,
+            $costPerKm,
+            $averagePricePerLitre,
+            $fillUpCount,
+            $cheapestFillUp,
+            $priciestFillUp,
+            $this->byStation($rows),
+            $this->byFuelType($rows, $stretches),
+        );
+    }
+
+    /**
+     * @param  Collection<int, FuelEntryRow>  $rows
+     * @return Collection<int, StationBreakdown>
+     */
+    private function byStation(Collection $rows): Collection
+    {
+        return $rows
+            ->groupBy(fn ($row) => $row->entry->gas_station)
+            ->map(fn (Collection $group, string $gasStation) => new StationBreakdown(
+                $gasStation,
+                (float) $group->sum(fn ($row) => (float) $row->entry->amount),
+                (float) $group->sum(fn ($row) => (float) $row->entry->litres_filled),
+                $group->count(),
+            ))
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, FuelEntryRow>  $rows
+     * @param  Collection<int, FuelStretch>  $stretches
+     * @return Collection<int, FuelTypeBreakdown>
+     */
+    private function byFuelType(Collection $rows, Collection $stretches): Collection
+    {
+        $l100kmSamplesByKey = $stretches
+            ->groupBy(fn (FuelStretch $stretch) => $this->fuelTypeKey($stretch->closingEntry->fuel_type?->value, $stretch->closingEntry->fuel_variant))
+            ->map(fn (Collection $group) => $group->pluck('l100km')->all());
+
+        return $rows
+            ->groupBy(fn ($row) => $this->fuelTypeKey($row->entry->fuel_type?->value, $row->entry->fuel_variant))
+            ->map(function (Collection $group, string $key) use ($l100kmSamplesByKey) {
+                $first = $group->first()->entry;
+                $samples = $l100kmSamplesByKey->get($key, []);
+
+                return new FuelTypeBreakdown(
+                    $first->fuel_type,
+                    $first->fuel_variant,
+                    (float) $group->sum(fn ($row) => (float) $row->entry->amount),
+                    (float) $group->sum(fn ($row) => (float) $row->entry->litres_filled),
+                    $samples === [] ? null : array_sum($samples) / count($samples),
+                    $group->count(),
+                );
+            })
+            ->values();
+    }
+
+    private function fuelTypeKey(?string $fuelType, ?string $fuelVariant): string
+    {
+        return ($fuelType ?? '').'|'.($fuelVariant ?? '');
     }
 
     /**

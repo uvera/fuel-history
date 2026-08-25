@@ -101,4 +101,58 @@ class CarFuelHistoryPageTest extends TestCase
         $component->set('analyticsPeriod', 'year')
             ->assertSee('7,000.00');
     }
+
+    public function test_all_time_summary_renders_totals_cheapest_priciest_and_breakdowns(): void
+    {
+        $user = User::factory()->create(['app_authentication_secret' => 'enrolled']);
+        $car = Car::factory()->create();
+
+        FuelEntry::factory()->create([
+            'car_id' => $car->id, 'user_id' => $user->id,
+            'gas_station' => 'Station A', 'fuel_type' => 'gasoline', 'fuel_variant' => '95',
+            'odometer_at_fill' => 10000, 'litres_filled' => 40, 'amount' => 4000,
+            'date_of_filling' => '2026-01-01', 'is_partial_fill' => false,
+        ]);
+        FuelEntry::factory()->create([
+            'car_id' => $car->id, 'user_id' => $user->id,
+            'gas_station' => 'Station A', 'fuel_type' => 'gasoline', 'fuel_variant' => '95',
+            'odometer_at_fill' => 10500, 'litres_filled' => 50, 'amount' => 5000,
+            'date_of_filling' => '2026-01-10', 'is_partial_fill' => false,
+        ]);
+        FuelEntry::factory()->create([
+            'car_id' => $car->id, 'user_id' => $user->id,
+            'gas_station' => 'Station B', 'fuel_type' => 'lpg', 'fuel_variant' => null,
+            'odometer_at_fill' => 11000, 'litres_filled' => 10, 'amount' => 1500,
+            'date_of_filling' => '2026-01-20', 'is_partial_fill' => false,
+        ]);
+
+        $this->actingAs($user);
+
+        $component = Livewire::test(CarFuelHistory::class, ['record' => $car]);
+
+        // Total spend: 4000 + 5000 + 1500 = 10500.00
+        $component->assertSee('10,500.00');
+        // Total litres: 40 + 50 + 10 = 100.000
+        $component->assertSee('100.000');
+        // Total km: (10500-10000) + (11000-10500) = 1000
+        $component->assertSee('1,000');
+        // Fill-up count
+        $component->assertSee('Fill-ups')->assertSee('3');
+        // Station breakdown
+        $component->assertSee('Station A')->assertSee('Station B');
+        // Fuel type breakdown label
+        $component->assertSee('Gasoline (95)')->assertSee('LPG');
+    }
+
+    public function test_all_time_summary_handles_car_with_no_entries(): void
+    {
+        $user = User::factory()->create(['app_authentication_secret' => 'enrolled']);
+        $car = Car::factory()->create();
+
+        $this->actingAs($user);
+
+        Livewire::test(CarFuelHistory::class, ['record' => $car])
+            ->assertOk()
+            ->assertSee('No fuel entries for this car yet.');
+    }
 }
