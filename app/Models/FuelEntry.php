@@ -77,7 +77,7 @@ class FuelEntry extends Model
             'car_id' => [$required, 'integer', 'exists:cars,id'],
             'fuel_type' => [$required, Rule::enum(FuelType::class)],
             'fuel_variant' => $allFieldsRequired
-                ? ['required_unless:fuel_type,'.FuelType::Electric->value, 'string', 'max:255']
+                ? ['nullable', 'required_unless:fuel_type,'.FuelType::Electric->value, 'string', 'max:255']
                 : ['sometimes', 'nullable', 'string', 'max:255'],
             'gas_station' => [$required, 'string', 'max:255'],
             'litres_filled' => [$required, 'numeric', 'min:0.001'],

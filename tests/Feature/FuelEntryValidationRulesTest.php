@@ -96,6 +96,31 @@ class FuelEntryValidationRulesTest extends TestCase
         $this->assertFalse($validator->fails());
     }
 
+    public function test_create_validation_allows_explicit_null_fuel_variant_when_fuel_type_is_electric(): void
+    {
+        $car = Car::factory()->create();
+
+        $validator = Validator::make(
+            [...$this->baseData($car), 'fuel_type' => FuelType::Electric->value, 'fuel_variant' => null],
+            FuelEntry::validationRules(),
+        );
+
+        $this->assertFalse($validator->fails());
+    }
+
+    public function test_create_validation_rejects_explicit_null_fuel_variant_when_fuel_type_is_not_electric(): void
+    {
+        $car = Car::factory()->create();
+
+        $validator = Validator::make(
+            [...$this->baseData($car), 'fuel_type' => FuelType::Diesel->value, 'fuel_variant' => null],
+            FuelEntry::validationRules(),
+        );
+
+        $this->assertTrue($validator->fails());
+        $this->assertArrayHasKey('fuel_variant', $validator->errors()->toArray());
+    }
+
     public function test_edit_validation_allows_omitting_fuel_type_and_fuel_variant_entirely(): void
     {
         $validator = Validator::make(
