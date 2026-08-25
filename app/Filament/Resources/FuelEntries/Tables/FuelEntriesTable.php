@@ -60,7 +60,8 @@ class FuelEntriesTable
                 SelectFilter::make('car_id')
                     ->label('Car')
                     ->relationship('car', 'name')
-                    ->searchable(),
+                    ->searchable()
+                    ->preload(),
                 SelectFilter::make('gas_station')
                     ->label('Gas station')
                     ->options(fn () => FuelEntry::query()->distinct()->orderBy('gas_station')->pluck('gas_station', 'gas_station'))
@@ -68,7 +69,8 @@ class FuelEntriesTable
                 SelectFilter::make('user_id')
                     ->label('Logged by')
                     ->relationship('user', 'name')
-                    ->searchable(),
+                    ->searchable()
+                    ->preload(),
             ])
             ->recordActions([
                 EditAction::make()
