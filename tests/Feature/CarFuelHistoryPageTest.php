@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\CarFuelHistory;
+use App\Filament\Widgets\CarAnalyticsWidget;
 use App\Models\Car;
 use App\Models\FuelEntry;
 use App\Models\User;
@@ -59,11 +60,11 @@ class CarFuelHistoryPageTest extends TestCase
         $component = Livewire::test(CarFuelHistory::class, ['record' => $car]);
 
         // 45L (15 + 30) over 500km (10500 - 10000) * 100 = 9.0
-        $component->assertSee('9.00');
+        $component->assertSee('9,00');
         // Trip estimate on the partial row: 15L / 200km * 100 = 7.50
-        $component->assertSee('7.50');
+        $component->assertSee('7,50');
         // Price per litre on full2: 3000 / 30 = 100.00
-        $component->assertSee('100.00');
+        $component->assertSee('100,00');
     }
 
     public function test_regular_user_can_view_the_page_read_only(): void
@@ -92,14 +93,14 @@ class CarFuelHistoryPageTest extends TestCase
 
         $this->actingAs($user);
 
-        $component = Livewire::test(CarFuelHistory::class, ['record' => $car]);
+        $component = Livewire::test(CarAnalyticsWidget::class, ['car' => $car]);
 
         // Default period is "month" -> two separate buckets.
         $component->assertSee('2026-01')->assertSee('2026-02');
 
         // Switching to "year" collapses both entries into one 7000 RSD bucket.
-        $component->set('analyticsPeriod', 'year')
-            ->assertSee('7,000.00');
+        $component->filterTable('period', 'year')
+            ->assertSee('7.000,00');
     }
 
     public function test_all_time_summary_renders_totals_cheapest_priciest_and_breakdowns(): void
@@ -131,11 +132,11 @@ class CarFuelHistoryPageTest extends TestCase
         $component = Livewire::test(CarFuelHistory::class, ['record' => $car]);
 
         // Total spend: 4000 + 5000 + 1500 = 10500.00
-        $component->assertSee('10,500.00');
+        $component->assertSee('10.500,00');
         // Total litres: 40 + 50 + 10 = 100.000
-        $component->assertSee('100.000');
+        $component->assertSee('100,000');
         // Total km: (10500-10000) + (11000-10500) = 1000
-        $component->assertSee('1,000');
+        $component->assertSee('1.000');
         // Fill-up count
         $component->assertSee('Fill-ups')->assertSee('3');
         // Station breakdown

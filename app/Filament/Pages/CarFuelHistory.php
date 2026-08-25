@@ -3,9 +3,6 @@
 namespace App\Filament\Pages;
 
 use App\Models\Car;
-use App\Services\AnalyticsPeriod;
-use App\Services\AnalyticsService;
-use App\Services\Data\CarFuelSummary;
 use App\Services\Data\FuelEntryRow;
 use App\Services\FuelStretchService;
 use BackedEnum;
@@ -31,8 +28,6 @@ class CarFuelHistory extends Page implements HasTable
 
     public Car $record;
 
-    public string $analyticsPeriod = 'month';
-
     public function mount(Car $record): void
     {
         $this->record = $record;
@@ -41,33 +36,6 @@ class CarFuelHistory extends Page implements HasTable
     public function getTitle(): string
     {
         return "Fuel history — {$this->record->name}";
-    }
-
-    /**
-     * @return array<int, array{label: string, amount: float, litres: float, avgL100km: ?float}>
-     */
-    public function getAnalyticsBucketsProperty(): array
-    {
-        $entries = $this->record->fuelEntries()->get();
-        $buckets = app(AnalyticsService::class)->bucketsForCar($entries, AnalyticsPeriod::from($this->analyticsPeriod));
-
-        return $buckets
-            ->reverse()
-            ->values()
-            ->map(fn ($bucket) => [
-                'label' => $bucket->label,
-                'amount' => $bucket->totalAmount,
-                'litres' => $bucket->totalLitres,
-                'avgL100km' => $bucket->averageL100km(),
-            ])
-            ->all();
-    }
-
-    public function getAllTimeSummaryProperty(): CarFuelSummary
-    {
-        $entries = $this->record->fuelEntries()->with('user')->get();
-
-        return app(AnalyticsService::class)->allTimeSummaryForCar($entries);
     }
 
     public function table(Table $table): Table
@@ -117,7 +85,7 @@ class CarFuelHistory extends Page implements HasTable
                     ->numeric(2),
                 TextColumn::make('price_per_litre')
                     ->label('Price/L')
-                    ->formatStateUsing(fn (float $state): string => number_format($state, 2)),
+                    ->formatStateUsing(fn (float $state): string => number_format($state, 2, ',', '.')),
                 TextColumn::make('odometer_at_fill')
                     ->label('Odometer')
                     ->placeholder('—'),
@@ -127,13 +95,13 @@ class CarFuelHistory extends Page implements HasTable
                 TextColumn::make('l100km_accurate')
                     ->label('L/100km')
                     ->placeholder('—')
-                    ->formatStateUsing(fn (?float $state): ?string => $state === null ? null : number_format($state, 2)),
+                    ->formatStateUsing(fn (?float $state): ?string => $state === null ? null : number_format($state, 2, ',', '.')),
                 TextColumn::make('l100km_trip_estimate')
                     ->label('≈ L/100km (trip)')
                     ->placeholder('—')
                     ->color('gray')
                     ->tooltip('Estimated from trip-computer km for this partial fill only — not directly comparable to the accurate L/100km column.')
-                    ->formatStateUsing(fn (?float $state): ?string => $state === null ? null : number_format($state, 2)),
+                    ->formatStateUsing(fn (?float $state): ?string => $state === null ? null : number_format($state, 2, ',', '.')),
                 IconColumn::make('is_partial_fill')
                     ->label('Partial')
                     ->boolean(),

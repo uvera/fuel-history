@@ -42,7 +42,9 @@ class FuelEntriesTable
                     ->label('Price/L')
                     ->state(fn (FuelEntry $record): string => number_format(
                         $record->litres_filled > 0 ? $record->amount / $record->litres_filled : 0,
-                        2
+                        2,
+                        ',',
+                        '.',
                     )),
                 TextColumn::make('odometer_at_fill')
                     ->label('Odometer')
