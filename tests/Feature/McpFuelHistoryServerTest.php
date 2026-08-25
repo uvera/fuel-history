@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\FuelType;
 use App\Models\Car;
 use App\Models\FuelEntry;
 use App\Models\User;
@@ -89,6 +90,8 @@ class McpFuelHistoryServerTest extends TestCase
 
         $response = $this->callTool($token, 'add-fuel-entry', [
             'car_id' => $car->id,
+            'fuel_type' => 'gasoline',
+            'fuel_variant' => '95',
             'gas_station' => 'Test Station',
             'litres_filled' => 40.5,
             'amount' => 5000,
@@ -111,6 +114,8 @@ class McpFuelHistoryServerTest extends TestCase
 
         $response = $this->callTool($token, 'add-fuel-entry', [
             'car_id' => $car->id,
+            'fuel_type' => 'gasoline',
+            'fuel_variant' => '95',
             'gas_station' => 'Test Station',
             'litres_filled' => -5, // invalid: must be positive
             'amount' => 5000,
@@ -221,5 +226,103 @@ class McpFuelHistoryServerTest extends TestCase
 
         $response->assertOk();
         $this->assertTrue((bool) $response->json('result.isError'));
+    }
+
+    public function test_add_fuel_entry_requires_fuel_type(): void
+    {
+        $user = User::factory()->create();
+        $token = $this->tokenFor($user);
+        $car = Car::factory()->create();
+
+        $response = $this->callTool($token, 'add-fuel-entry', [
+            'car_id' => $car->id,
+            'fuel_variant' => '95',
+            'gas_station' => 'Test Station',
+            'litres_filled' => 40.5,
+            'amount' => 5000,
+            'odometer_at_fill' => 12345,
+            'date_of_filling' => '2026-08-25 10:00:00',
+        ]);
+
+        $this->assertSame(0, FuelEntry::count());
+        $this->assertTrue((bool) $response->json('result.isError'));
+    }
+
+    public function test_add_fuel_entry_requires_fuel_variant_when_not_electric(): void
+    {
+        $user = User::factory()->create();
+        $token = $this->tokenFor($user);
+        $car = Car::factory()->create();
+
+        $response = $this->callTool($token, 'add-fuel-entry', [
+            'car_id' => $car->id,
+            'fuel_type' => 'diesel',
+            'gas_station' => 'Test Station',
+            'litres_filled' => 40.5,
+            'amount' => 5000,
+            'odometer_at_fill' => 12345,
+            'date_of_filling' => '2026-08-25 10:00:00',
+        ]);
+
+        $this->assertSame(0, FuelEntry::count());
+        $this->assertTrue((bool) $response->json('result.isError'));
+    }
+
+    public function test_add_fuel_entry_allows_missing_fuel_variant_when_electric(): void
+    {
+        $user = User::factory()->create();
+        $token = $this->tokenFor($user);
+        $car = Car::factory()->create();
+
+        $response = $this->callTool($token, 'add-fuel-entry', [
+            'car_id' => $car->id,
+            'fuel_type' => 'electric',
+            'gas_station' => 'Charging Station',
+            'litres_filled' => 40.5,
+            'amount' => 5000,
+            'odometer_at_fill' => 12345,
+            'date_of_filling' => '2026-08-25 10:00:00',
+        ]);
+
+        $response->assertOk();
+        $this->assertFalse((bool) $response->json('result.isError'));
+        $entry = FuelEntry::firstOrFail();
+        $this->assertNull($entry->fuel_variant);
+    }
+
+    public function test_edit_fuel_entry_can_change_just_fuel_type_without_resending_fuel_variant(): void
+    {
+        $user = User::factory()->create();
+        $token = $this->tokenFor($user);
+        $entry = FuelEntry::factory()->create(['user_id' => $user->id, 'fuel_type' => FuelType::Diesel, 'fuel_variant' => 'B7']);
+
+        $response = $this->callTool($token, 'edit-fuel-entry', [
+            'entry_id' => $entry->id,
+            'fuel_type' => 'gasoline',
+        ]);
+
+        $response->assertOk();
+        $this->assertFalse((bool) $response->json('result.isError'));
+        $this->assertSame(FuelType::Gasoline, $entry->refresh()->fuel_type);
+        $this->assertSame('B7', $entry->fuel_variant);
+    }
+
+    public function test_list_fuel_entries_includes_fuel_type_and_variant(): void
+    {
+        $user = User::factory()->create();
+        $token = $this->tokenFor($user);
+        $car = Car::factory()->create();
+        FuelEntry::factory()->create([
+            'car_id' => $car->id,
+            'user_id' => $user->id,
+            'fuel_type' => FuelType::Lpg,
+            'fuel_variant' => 'Autogas',
+        ]);
+
+        $response = $this->callTool($token, 'list-fuel-entries', ['car_id' => $car->id]);
+        $text = $this->toolText($response);
+
+        $this->assertStringContainsString('lpg', $text);
+        $this->assertStringContainsString('Autogas', $text);
     }
 }

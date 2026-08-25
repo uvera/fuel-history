@@ -12,7 +12,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 
 #[Name('edit-fuel-entry')]
-#[Description('Edits a fuel entry. Only the entry\'s owner or an admin may edit it -- same rule as the app itself. Only include the fields you want to change; entry_id is the only required field.')]
+#[Description('Edits a fuel entry. Only the entry\'s owner or an admin may edit it -- same rule as the app itself. Only include the fields you want to change; entry_id is the only required field. If you set fuel_type to a non-electric value, also set fuel_variant.')]
 class EditFuelEntryTool extends Tool
 {
     public function handle(Request $request): Response
@@ -52,6 +52,10 @@ class EditFuelEntryTool extends Tool
                 ->required(),
             'car_id' => $schema->integer()
                 ->description('Move this entry to a different car.'),
+            'fuel_type' => $schema->string()
+                ->description('One of: gasoline, diesel, lpg, electric.'),
+            'fuel_variant' => $schema->string()
+                ->description('The specific grade or product, e.g. "95", "98", "B7", "Shell V-Power".'),
             'gas_station' => $schema->string()
                 ->description('Name of the gas station.'),
             'litres_filled' => $schema->number()
