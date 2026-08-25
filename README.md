@@ -36,6 +36,16 @@ Optionally bootstrap an admin account on first `db:seed` by setting
 ddev artisan db:seed
 ```
 
+Or create/promote an admin interactively at any time (requires a real
+terminal — piped/non-interactive input isn't supported by Laravel Prompts):
+
+```bash
+ddev artisan users:make-admin
+```
+
+If the email already exists it offers to promote that user to admin
+instead of creating a new one.
+
 Then visit the panel (`ddev launch /admin`) and log in — you'll be forced
 through TOTP enrollment (scan the QR code with an authenticator app) before
 you can do anything else.
