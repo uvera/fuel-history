@@ -7,6 +7,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class FuelEntriesTable
@@ -55,6 +56,20 @@ class FuelEntriesTable
                     ->label('Logged by'),
             ])
             ->defaultSort('date_of_filling', 'desc')
+            ->filters([
+                SelectFilter::make('car_id')
+                    ->label('Car')
+                    ->relationship('car', 'name')
+                    ->searchable(),
+                SelectFilter::make('gas_station')
+                    ->label('Gas station')
+                    ->options(fn () => FuelEntry::query()->distinct()->orderBy('gas_station')->pluck('gas_station', 'gas_station'))
+                    ->searchable(),
+                SelectFilter::make('user_id')
+                    ->label('Logged by')
+                    ->relationship('user', 'name')
+                    ->searchable(),
+            ])
             ->recordActions([
                 EditAction::make()
                     ->visible(fn (FuelEntry $record) => auth()->user()->can('update', $record)),
