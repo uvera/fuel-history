@@ -74,9 +74,37 @@ class AnalyticsService
     public function allTimeSummaryForCar(Collection $entries): CarFuelSummary
     {
         $result = $this->stretchService->compute($entries);
-        $rows = $result->rows;
-        $stretches = $result->stretches;
 
+        return $this->summarize($result->rows, $result->stretches);
+    }
+
+    /**
+     * All-time summary across every car, pooling each car's rows/stretches
+     * after computing them independently — same reasoning as bucketsGlobal:
+     * stretches must never be computed across merged multi-car entries.
+     *
+     * @param  Collection<int, Collection<int, FuelEntry>>  $entriesByCar  One entry collection per car.
+     */
+    public function allTimeSummaryGlobal(Collection $entriesByCar): CarFuelSummary
+    {
+        $rows = collect();
+        $stretches = collect();
+
+        foreach ($entriesByCar as $carEntries) {
+            $result = $this->stretchService->compute($carEntries);
+            $rows = $rows->merge($result->rows);
+            $stretches = $stretches->merge($result->stretches);
+        }
+
+        return $this->summarize($rows, $stretches);
+    }
+
+    /**
+     * @param  Collection<int, FuelEntryRow>  $rows
+     * @param  Collection<int, FuelStretch>  $stretches
+     */
+    private function summarize(Collection $rows, Collection $stretches): CarFuelSummary
+    {
         $totalAmount = (float) $rows->sum(fn ($row) => (float) $row->entry->amount);
         $totalLitres = (float) $rows->sum(fn ($row) => (float) $row->entry->litres_filled);
         $totalKm = (int) $rows->sum(fn ($row) => $row->kmSincePrevious ?? 0);

@@ -2,6 +2,11 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Widgets\AllCarsAnalyticsWidget;
+use App\Filament\Widgets\AllCarsFuelSummaryStatsWidget;
+use App\Filament\Widgets\GlobalEfficiencyChart;
+use App\Filament\Widgets\GlobalSpendChart;
+use App\Filament\Widgets\GlobalVolumeChart;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -39,10 +44,14 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 Dashboard::class,
             ])
-            ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
                 AccountWidget::class,
                 FilamentInfoWidget::class,
+                AllCarsFuelSummaryStatsWidget::class,
+                AllCarsAnalyticsWidget::class,
+                GlobalSpendChart::class,
+                GlobalVolumeChart::class,
+                GlobalEfficiencyChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,
