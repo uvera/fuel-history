@@ -103,6 +103,26 @@ class McpFuelHistoryServerTest extends TestCase
         $this->assertSame('RSD', $entry->currency);
     }
 
+    public function test_add_fuel_entry_allows_omitting_odometer_at_fill(): void
+    {
+        // Receipt-only entry — no photo of the odometer to read it from.
+        $user = User::factory()->create();
+        $token = $this->tokenFor($user);
+        $car = Car::factory()->create();
+
+        $response = $this->callTool($token, 'add-fuel-entry', [
+            'car_id' => $car->id,
+            'gas_station' => 'Test Station',
+            'litres_filled' => 40.5,
+            'amount' => 5000,
+            'date_of_filling' => '2026-08-25 10:00:00',
+        ]);
+
+        $response->assertOk();
+        $entry = FuelEntry::firstOrFail();
+        $this->assertNull($entry->odometer_at_fill);
+    }
+
     public function test_add_fuel_entry_rejects_invalid_data(): void
     {
         $user = User::factory()->create();

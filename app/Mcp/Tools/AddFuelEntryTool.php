@@ -51,8 +51,7 @@ class AddFuelEntryTool extends Tool
                 ->description('Amount paid, in RSD.')
                 ->required(),
             'odometer_at_fill' => $schema->integer()
-                ->description('Odometer reading (km) at the time of this fill-up.')
-                ->required(),
+                ->description('Odometer reading (km) at the time of this fill-up. Omit if unknown, e.g. a receipt-only entry with no odometer photo.'),
             'date_of_filling' => $schema->string()
                 ->description('Date/time of the fill-up, e.g. 2026-08-25 14:30.')
                 ->required(),

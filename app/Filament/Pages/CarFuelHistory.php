@@ -111,7 +111,8 @@ class CarFuelHistory extends Page implements HasTable
                     ->label('Price/L')
                     ->formatStateUsing(fn (float $state): string => number_format($state, 2)),
                 TextColumn::make('odometer_at_fill')
-                    ->label('Odometer'),
+                    ->label('Odometer')
+                    ->placeholder('—'),
                 TextColumn::make('km_since_previous')
                     ->label('KM since previous')
                     ->placeholder('—'),

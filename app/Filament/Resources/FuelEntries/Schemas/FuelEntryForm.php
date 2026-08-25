@@ -38,9 +38,9 @@ class FuelEntryForm
                     ->required(),
                 TextInput::make('odometer_at_fill')
                     ->label('Odometer (km)')
+                    ->helperText('Leave blank if you only have the receipt, with no odometer photo.')
                     ->numeric()
-                    ->minValue(0)
-                    ->required(),
+                    ->minValue(0),
                 DateTimePicker::make('date_of_filling')
                     ->required()
                     ->default(now()),

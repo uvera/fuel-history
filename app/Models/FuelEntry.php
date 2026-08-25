@@ -66,7 +66,10 @@ class FuelEntry extends Model
             'gas_station' => [$required, 'string', 'max:255'],
             'litres_filled' => [$required, 'numeric', 'min:0.001'],
             'amount' => [$required, 'numeric', 'min:0.01'],
-            'odometer_at_fill' => [$required, 'integer', 'min:0'],
+            // Odometer is the one field that may genuinely be unknown --
+            // e.g. a receipt-only entry with no photo of the odometer --
+            // so it's always nullable, regardless of $allFieldsRequired.
+            'odometer_at_fill' => ['nullable', 'integer', 'min:0'],
             'date_of_filling' => [$required, 'date'],
             'is_partial_fill' => ['sometimes', 'boolean'],
             'trip_km' => ['nullable', 'numeric', 'min:0.1'],

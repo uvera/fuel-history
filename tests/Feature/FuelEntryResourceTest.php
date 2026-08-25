@@ -50,6 +50,29 @@ class FuelEntryResourceTest extends TestCase
         $this->assertSame('RSD', $entry->currency);
     }
 
+    public function test_fuel_entry_can_be_logged_without_an_odometer_reading(): void
+    {
+        // Receipt-only entry — no photo of the odometer to read it from.
+        $car = Car::factory()->create();
+        $this->actingAs($this->user());
+
+        Livewire::test(CreateFuelEntry::class)
+            ->fillForm([
+                'car_id' => $car->id,
+                'gas_station' => 'Test Petrol Station',
+                'litres_filled' => 42.5,
+                'amount' => 5000,
+                'odometer_at_fill' => null,
+                'date_of_filling' => now(),
+                'is_partial_fill' => false,
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $entry = FuelEntry::firstOrFail();
+        $this->assertNull($entry->odometer_at_fill);
+    }
+
     public function test_partial_fill_shows_trip_km_field_and_it_persists(): void
     {
         $car = Car::factory()->create();

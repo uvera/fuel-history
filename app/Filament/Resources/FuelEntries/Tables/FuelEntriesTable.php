@@ -39,7 +39,8 @@ class FuelEntriesTable
                 TextColumn::make('odometer_at_fill')
                     ->label('Odometer')
                     ->numeric()
-                    ->sortable(),
+                    ->sortable()
+                    ->placeholder('—'),
                 IconColumn::make('is_partial_fill')
                     ->label('Partial')
                     ->boolean(),

@@ -31,7 +31,7 @@ class FuelStretchServiceTest extends TestCase
     private function entry(
         int $id,
         string $date,
-        int $odometer,
+        ?int $odometer,
         float $litres,
         float $amount,
         bool $isPartial = false,
@@ -212,5 +212,38 @@ class FuelStretchServiceTest extends TestCase
 
         $this->assertCount(0, $result->rows);
         $this->assertCount(0, $result->stretches);
+    }
+
+    public function test_entry_with_unknown_odometer_has_no_km_since_previous_and_breaks_the_chain(): void
+    {
+        // Receipt-only entry — no odometer photo, so it's unknown. Neither
+        // its own km-since-previous nor the *next* entry's can be computed,
+        // since we don't know where the unknown entry actually happened.
+        $first = $this->entry(1, '2026-01-01', 10000, 40, 4000);
+        $unknown = $this->entry(2, '2026-01-08', null, 15, 1500);
+        $third = $this->entry(3, '2026-01-15', 10500, 30, 3000);
+
+        $result = $this->service->compute(new Collection([$first, $unknown, $third]));
+
+        $rows = $result->rows->values();
+        $this->assertNull($rows[1]->kmSincePrevious);
+        $this->assertNull($rows[2]->kmSincePrevious);
+    }
+
+    public function test_full_fill_with_unknown_odometer_produces_no_stretch_and_resets_span_chain(): void
+    {
+        // The closing full fill of a stretch has no odometer — the span
+        // can't be computed, so no stretch is recorded for it, and the
+        // *next* full fill can't span back past it either.
+        $full1 = $this->entry(1, '2026-01-01', 10000, 40, 4000);
+        $unknownFull = $this->entry(2, '2026-01-08', null, 20, 2000);
+        $full2 = $this->entry(3, '2026-01-15', 10500, 30, 3000);
+
+        $result = $this->service->compute(new Collection([$full1, $unknownFull, $full2]));
+
+        $this->assertCount(0, $result->stretches);
+        $rows = $result->rows->values();
+        $this->assertNull($rows[1]->l100kmAccurate);
+        $this->assertNull($rows[2]->l100kmAccurate);
     }
 }

@@ -45,7 +45,7 @@ class FuelStretchService
             $litres = (float) $entry->litres_filled;
             $pricePerLitre = $litres > 0 ? (float) $entry->amount / $litres : 0.0;
 
-            $kmSincePrevious = $previousOdometer !== null
+            $kmSincePrevious = ($previousOdometer !== null && $entry->odometer_at_fill !== null)
                 ? $entry->odometer_at_fill - $previousOdometer
                 : null;
 
@@ -60,7 +60,7 @@ class FuelStretchService
                     $l100kmTripEstimate = ($litres / $tripKm) * 100;
                 }
             } else {
-                if ($previousFullFillOdometer !== null) {
+                if ($previousFullFillOdometer !== null && $entry->odometer_at_fill !== null) {
                     $span = $entry->odometer_at_fill - $previousFullFillOdometer;
                     if ($span > 0) {
                         $l100kmAccurate = ($stretchLitres / $span) * 100;
