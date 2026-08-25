@@ -3,6 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Models\Car;
+use App\Services\AnalyticsPeriod;
+use App\Services\AnalyticsService;
 use App\Services\Data\FuelEntryRow;
 use App\Services\FuelStretchService;
 use BackedEnum;
@@ -28,6 +30,8 @@ class CarFuelHistory extends Page implements HasTable
 
     public Car $record;
 
+    public string $analyticsPeriod = 'month';
+
     public function mount(Car $record): void
     {
         $this->record = $record;
@@ -36,6 +40,26 @@ class CarFuelHistory extends Page implements HasTable
     public function getTitle(): string
     {
         return "Fuel history — {$this->record->name}";
+    }
+
+    /**
+     * @return array<int, array{label: string, amount: float, litres: float, avgL100km: ?float}>
+     */
+    public function getAnalyticsBucketsProperty(): array
+    {
+        $entries = $this->record->fuelEntries()->get();
+        $buckets = app(AnalyticsService::class)->bucketsForCar($entries, AnalyticsPeriod::from($this->analyticsPeriod));
+
+        return $buckets
+            ->reverse()
+            ->values()
+            ->map(fn ($bucket) => [
+                'label' => $bucket->label,
+                'amount' => $bucket->totalAmount,
+                'litres' => $bucket->totalLitres,
+                'avgL100km' => $bucket->averageL100km(),
+            ])
+            ->all();
     }
 
     public function table(Table $table): Table

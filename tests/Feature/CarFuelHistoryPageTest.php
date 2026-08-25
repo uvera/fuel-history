@@ -75,4 +75,30 @@ class CarFuelHistoryPageTest extends TestCase
             ->get(CarFuelHistory::getUrl(['record' => $car]))
             ->assertOk();
     }
+
+    public function test_per_car_analytics_summary_reflects_the_selected_period(): void
+    {
+        $user = User::factory()->create(['app_authentication_secret' => 'enrolled']);
+        $car = Car::factory()->create();
+
+        FuelEntry::factory()->create([
+            'car_id' => $car->id, 'user_id' => $user->id,
+            'date_of_filling' => '2026-01-05', 'amount' => 4000, 'litres_filled' => 40,
+        ]);
+        FuelEntry::factory()->create([
+            'car_id' => $car->id, 'user_id' => $user->id,
+            'date_of_filling' => '2026-02-05', 'amount' => 3000, 'litres_filled' => 30,
+        ]);
+
+        $this->actingAs($user);
+
+        $component = Livewire::test(CarFuelHistory::class, ['record' => $car]);
+
+        // Default period is "month" -> two separate buckets.
+        $component->assertSee('2026-01')->assertSee('2026-02');
+
+        // Switching to "year" collapses both entries into one 7000 RSD bucket.
+        $component->set('analyticsPeriod', 'year')
+            ->assertSee('7,000.00');
+    }
 }
