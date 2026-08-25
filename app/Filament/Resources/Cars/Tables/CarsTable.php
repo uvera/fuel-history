@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Cars\Tables;
 
+use App\Filament\Pages\CarFuelHistory;
 use App\Models\Car;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -43,6 +44,10 @@ class CarsTable
                     ->default(false),
             ])
             ->recordActions([
+                Action::make('fuelHistory')
+                    ->label('Fuel history')
+                    ->icon('heroicon-o-table-cells')
+                    ->url(fn (Car $record) => CarFuelHistory::getUrl(['record' => $record])),
                 EditAction::make()
                     ->visible(fn (Car $record) => auth()->user()->can('update', $record)),
                 Action::make('archive')
