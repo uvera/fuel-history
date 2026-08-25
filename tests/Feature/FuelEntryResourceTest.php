@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\FuelType;
 use App\Filament\Resources\FuelEntries\FuelEntryResource;
 use App\Filament\Resources\FuelEntries\Pages\CreateFuelEntry;
 use App\Filament\Resources\FuelEntries\Pages\EditFuelEntry;
@@ -34,6 +35,8 @@ class FuelEntryResourceTest extends TestCase
         Livewire::test(CreateFuelEntry::class)
             ->fillForm([
                 'car_id' => $car->id,
+                'fuel_type' => 'gasoline',
+                'fuel_variant' => '95',
                 'gas_station' => 'Test Petrol Station',
                 'litres_filled' => 42.5,
                 'amount' => 5000,
@@ -58,6 +61,8 @@ class FuelEntryResourceTest extends TestCase
         Livewire::test(CreateFuelEntry::class)
             ->fillForm([
                 'car_id' => $car->id,
+                'fuel_type' => 'gasoline',
+                'fuel_variant' => '95',
                 'gas_station' => 'Test Petrol Station',
                 'litres_filled' => 20,
                 'amount' => 2500,
@@ -121,5 +126,66 @@ class FuelEntryResourceTest extends TestCase
 
         $this->assertFalse($otherUser->can('delete', $entry));
         $this->assertTrue($owner->can('delete', $entry));
+    }
+
+    public function test_creating_an_entry_without_fuel_type_fails_validation(): void
+    {
+        $car = Car::factory()->create();
+        $this->actingAs($this->user());
+
+        Livewire::test(CreateFuelEntry::class)
+            ->fillForm([
+                'car_id' => $car->id,
+                'fuel_variant' => '95',
+                'gas_station' => 'Test Petrol Station',
+                'litres_filled' => 42.5,
+                'amount' => 5000,
+                'odometer_at_fill' => 12345,
+                'date_of_filling' => now(),
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['fuel_type']);
+    }
+
+    public function test_creating_a_non_electric_entry_without_fuel_variant_fails_validation(): void
+    {
+        $car = Car::factory()->create();
+        $this->actingAs($this->user());
+
+        Livewire::test(CreateFuelEntry::class)
+            ->fillForm([
+                'car_id' => $car->id,
+                'fuel_type' => 'diesel',
+                'gas_station' => 'Test Petrol Station',
+                'litres_filled' => 42.5,
+                'amount' => 5000,
+                'odometer_at_fill' => 12345,
+                'date_of_filling' => now(),
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['fuel_variant']);
+    }
+
+    public function test_creating_an_electric_entry_without_fuel_variant_succeeds(): void
+    {
+        $car = Car::factory()->create();
+        $this->actingAs($this->user());
+
+        Livewire::test(CreateFuelEntry::class)
+            ->fillForm([
+                'car_id' => $car->id,
+                'fuel_type' => FuelType::Electric->value,
+                'gas_station' => 'Charging Station',
+                'litres_filled' => 42.5,
+                'amount' => 5000,
+                'odometer_at_fill' => 12345,
+                'date_of_filling' => now(),
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $entry = FuelEntry::firstOrFail();
+        $this->assertSame(FuelType::Electric, $entry->fuel_type);
+        $this->assertNull($entry->fuel_variant);
     }
 }
