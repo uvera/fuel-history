@@ -42,4 +42,35 @@ class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    /**
+     * Enrolled in TOTP MFA — most feature tests need this to avoid being
+     * redirected into the mandatory enrollment flow (see
+     * MultiFactorAuthenticationTest).
+     */
+    public function enrolled(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'app_authentication_secret' => 'enrolled',
+        ]);
+    }
+
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => User::ROLE_ADMIN,
+        ]);
+    }
+
+    /**
+     * `created_by` isn't mass-assignable (see User::$fillable), so this
+     * sets it directly on the created model rather than via state().
+     */
+    public function createdBy(User $parent): static
+    {
+        return $this->afterCreating(function (User $user) use ($parent) {
+            $user->created_by = $parent->id;
+            $user->save();
+        });
+    }
 }

@@ -46,7 +46,9 @@ ddev artisan users:make-admin
 ```
 
 If the email already exists it offers to promote that user to admin
-instead of creating a new one.
+instead of creating a new one. Both of these bootstrap a **root** admin
+(see "User management" below) — use the panel for everyday user creation
+once at least one root admin exists.
 
 Then visit the panel (`ddev launch /admin`) and log in — you'll be forced
 through TOTP enrollment (scan the QR code with an authenticator app) before
@@ -85,6 +87,31 @@ The app exposes an [MCP](https://modelcontextprotocol.io) server at
 
 Revoke a token any time from the same **API Access** page.
 
+## User management
+
+Admins can create both regular users and other admins from the **Users**
+page in the panel. Every panel-created user is owned by the admin who
+created them (`created_by`), which anchors a management hierarchy:
+
+- An admin can edit/delete anyone they created, directly or transitively
+  (their whole "subtree") — but never their own creator or anyone above
+  that creator in the chain, and never another admin's subtree.
+- **Root admins** — accounts with no creator, i.e. bootstrapped via
+  `users:make-admin` or `db:seed` — can never be edited or deleted by
+  anyone from the panel, including other root admins.
+- Root admins can additionally manage **unowned regular users** (existing
+  accounts predating this feature, or any regular user with no creator).
+  Nested (non-root) admins cannot.
+- Deleting a manageable user reparents their children to that user's own
+  creator, so removing someone mid-chain never accidentally promotes a
+  descendant admin to root. A user with any logged fuel entries can't be
+  deleted at all (`fuel_entries.user_id` is `RESTRICT ON DELETE`).
+
+This hierarchy only governs **user** CRUD — every admin, root or nested,
+has the same full (non-hierarchical) admin powers over cars and fuel
+entries. See `App\Models\User::manages()` and `App\Policies\UserPolicy`
+for the exact rules.
+
 ## Architecture notes
 
 - **Database:** PostgreSQL only (not SQLite) — the test suite uses an
@@ -99,10 +126,11 @@ Revoke a token any time from the same **API Access** page.
   never disagree with each other. See the extensive unit test suites for
   both (`tests/Unit/FuelStretchServiceTest.php`,
   `tests/Unit/AnalyticsServiceTest.php`) for the exact behavior contract.
-- **Authorization:** `CarPolicy` (admin-only mutation) and
-  `FuelEntryPolicy` (owner-or-admin edit/delete, any authenticated user can
-  create) — Filament Resources pick these up automatically via Laravel's
-  policy auto-discovery.
+- **Authorization:** `CarPolicy` (admin-only mutation), `FuelEntryPolicy`
+  (owner-or-admin edit/delete, any authenticated user can create), and
+  `UserPolicy` (admin-only view/create, hierarchy-gated edit/delete — see
+  "User management" above) — Filament Resources pick these up
+  automatically via Laravel's policy auto-discovery.
 
 ## Deployment
 
