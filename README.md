@@ -112,6 +112,10 @@ has the same full (non-hierarchical) admin powers over cars and fuel
 entries. See `App\Models\User::manages()` and `App\Policies\UserPolicy`
 for the exact rules.
 
+Every user (admin or regular) can edit their own name, email, and
+password from **Profile** in the topbar user menu — Filament's built-in
+profile page, requiring the current password to confirm any change.
+
 ## Architecture notes
 
 - **Database:** PostgreSQL only (not SQLite) — the test suite uses an

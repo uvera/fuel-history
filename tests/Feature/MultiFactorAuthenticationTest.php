@@ -82,9 +82,11 @@ class MultiFactorAuthenticationTest extends TestCase
         $response = $this->actingAs($user)->get('/admin/multi-factor-authentication/set-up');
 
         // SetUpRequiredMultiFactorAuthentication::mount() redirects away
-        // (to the intended/dashboard URL) once isEnabled() is true — see
+        // once isEnabled() is true, to the intended URL or (since the
+        // panel has a profile page registered) the profile page as its
+        // fallback — see
         // vendor/filament/filament/src/Auth/MultiFactor/Pages/SetUpRequiredMultiFactorAuthentication.php.
-        $response->assertRedirect('/admin');
+        $response->assertRedirect('/admin/profile');
     }
 
     public function test_every_authenticated_user_can_access_the_panel_regardless_of_role(): void
