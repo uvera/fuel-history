@@ -2,14 +2,18 @@
 
 namespace App\Models;
 
+use App\Enums\FuelType;
 use Database\Factories\FuelEntryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\Rule;
 
 #[Fillable([
     'car_id',
     'user_id',
+    'fuel_type',
+    'fuel_variant',
     'gas_station',
     'litres_filled',
     'amount',
@@ -26,6 +30,7 @@ class FuelEntry extends Model
     protected function casts(): array
     {
         return [
+            'fuel_type' => FuelType::class,
             'litres_filled' => 'decimal:3',
             'amount' => 'decimal:2',
             'odometer_at_fill' => 'integer',
@@ -55,7 +60,14 @@ class FuelEntry extends Model
      * entry point is used), plus the fields those constraints can't
      * express (required-ness, foreign key existence).
      *
-     * @return array<string, array<int, string>>
+     * fuel_type/fuel_variant are deliberately NOT backed by a DB
+     * constraint (existing rows have no sane default) — required-ness for
+     * them lives here only. fuel_variant is required unless fuel_type is
+     * Electric; on edit (allFieldsRequired=false) both stay optional like
+     * every other partial-update field, so a caller can still patch just
+     * fuel_type without being forced to also resend fuel_variant.
+     *
+     * @return array<string, array<int, mixed>>
      */
     public static function validationRules(bool $allFieldsRequired = true): array
     {
@@ -63,6 +75,10 @@ class FuelEntry extends Model
 
         return [
             'car_id' => [$required, 'integer', 'exists:cars,id'],
+            'fuel_type' => [$required, Rule::enum(FuelType::class)],
+            'fuel_variant' => $allFieldsRequired
+                ? ['required_unless:fuel_type,'.FuelType::Electric->value, 'string', 'max:255']
+                : ['sometimes', 'nullable', 'string', 'max:255'],
             'gas_station' => [$required, 'string', 'max:255'],
             'litres_filled' => [$required, 'numeric', 'min:0.001'],
             'amount' => [$required, 'numeric', 'min:0.01'],
