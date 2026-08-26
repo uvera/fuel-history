@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -23,5 +24,7 @@ class AppServiceProvider extends ServiceProvider
         // RSD figures read naturally in Serbian numeric convention: dot for
         // thousands, comma for decimals (e.g. 64.879,74).
         Table::configureUsing(fn (Table $table) => $table->defaultNumberLocale('sr'));
+
+        Gate::define('create-backup', fn ($user) => $user->isAdmin());
     }
 }

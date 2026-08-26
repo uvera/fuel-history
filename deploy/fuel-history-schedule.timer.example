@@ -1,0 +1,14 @@
+# Fires fuel-history-schedule.service every minute, matching what a cron
+# entry of `* * * * * php artisan schedule:run` would do -- systemd timer
+# instead of cron to match this app's systemd-native deploy (see README.md).
+# Enable with: systemctl enable --now fuel-history-schedule.timer
+
+[Unit]
+Description=Run Fuel History scheduler every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
