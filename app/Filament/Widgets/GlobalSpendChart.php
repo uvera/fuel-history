@@ -20,7 +20,7 @@ class GlobalSpendChart extends ChartWidget
 
     protected function getData(): array
     {
-        $entriesByCar = Car::query()->with('fuelEntries')->get()->map(fn (Car $car) => $car->fuelEntries);
+        $entriesByCar = Car::query()->with('fuelEntries.car')->get()->map(fn (Car $car) => $car->fuelEntries);
         $buckets = app(AnalyticsService::class)->bucketsGlobal($entriesByCar, $this->period());
 
         return [

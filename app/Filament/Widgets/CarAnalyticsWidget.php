@@ -36,7 +36,7 @@ class CarAnalyticsWidget extends TableWidget
             ])
             ->records(function (): array {
                 $period = AnalyticsPeriod::from($this->getTableFilterState('period')['value'] ?? 'month');
-                $entries = $this->car->fuelEntries()->get();
+                $entries = $this->car->fuelEntries()->with('car')->get();
                 $buckets = app(AnalyticsService::class)->bucketsForCar($entries, $period);
 
                 return $buckets

@@ -2,8 +2,8 @@
 
 namespace App\Filament\Resources\FuelEntries\Schemas;
 
-use App\Enums\FuelType;
 use App\Models\Car;
+use App\Models\FuelEntry;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
@@ -21,17 +21,24 @@ class FuelEntryForm
                     ->label('Car')
                     ->options(fn () => Car::query()->orderBy('name')->pluck('name', 'id'))
                     ->searchable()
-                    ->required(),
-                Select::make('fuel_type')
-                    ->label('Fuel type')
-                    ->options(FuelType::class)
                     ->required()
                     ->live(),
                 TextInput::make('fuel_variant')
                     ->label('Fuel variant')
                     ->helperText('The specific grade or product, e.g. "95", "B7", "Shell V-Power".')
                     ->maxLength(255)
-                    ->required(fn (Get $get): bool => $get->enum('fuel_type', FuelType::class, isNullable: true) !== FuelType::Electric),
+                    ->nullable()
+                    ->required(function (Get $get): bool {
+                        $carId = $get('car_id');
+
+                        if (blank($carId)) {
+                            return true;
+                        }
+
+                        return FuelEntry::fuelVariantIsRequired(
+                            Car::query()->find($carId)?->fuel_type,
+                        );
+                    }),
                 TextInput::make('gas_station')
                     ->required()
                     ->maxLength(255),

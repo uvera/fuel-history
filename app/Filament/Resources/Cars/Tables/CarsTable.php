@@ -27,6 +27,9 @@ class CarsTable
                 TextColumn::make('year'),
                 TextColumn::make('plate')
                     ->label('Plate'),
+                TextColumn::make('fuel_type')
+                    ->label('Fuel type')
+                    ->badge(),
                 IconColumn::make('archived_at')
                     ->label('Archived')
                     ->boolean()

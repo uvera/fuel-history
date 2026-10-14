@@ -12,7 +12,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
 
 #[Name('list-cars')]
-#[Description('Lists the cars in the fuel-tracking app, so you can resolve a car name to its ID before adding, editing, or listing fuel entries.')]
+#[Description('Lists the cars in the fuel-tracking app, so you can resolve a car name to its ID before adding, editing, or listing fuel entries. Each car has one fuel_type: gasoline, diesel, lpg, or electric.')]
 class ListCarsTool extends Tool
 {
     public function handle(Request $request): Response
@@ -22,7 +22,7 @@ class ListCarsTool extends Tool
         $cars = Car::query()
             ->when(! $includeArchived, fn ($query) => $query->active())
             ->orderBy('name')
-            ->get(['id', 'name', 'make', 'model', 'year', 'plate', 'archived_at']);
+            ->get(['id', 'name', 'make', 'model', 'year', 'plate', 'fuel_type', 'archived_at']);
 
         $payload = $cars->map(fn (Car $car): array => [
             'id' => $car->id,
@@ -31,6 +31,7 @@ class ListCarsTool extends Tool
             'model' => $car->model,
             'year' => $car->year,
             'plate' => $car->plate,
+            'fuel_type' => $car->fuel_type->value,
             'archived' => $car->isArchived(),
         ])->all();
 

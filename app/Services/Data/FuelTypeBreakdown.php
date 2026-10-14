@@ -5,9 +5,9 @@ namespace App\Services\Data;
 use App\Enums\FuelType;
 
 /**
- * Totals for one fuel_type/fuel_variant combination, across a single car's
- * fuel history — lets a dual-fuel car (e.g. petrol + LPG) or a car that
- * changed octane grade see spend/efficiency broken out per combination.
+ * Totals for one car fuel type plus fuel variant. Fuel type comes from
+ * the car, so a single car splits by variant only — a grade change still
+ * shows up as its own row.
  */
 final class FuelTypeBreakdown
 {

@@ -22,10 +22,9 @@ class FuelEntriesTable
                 TextColumn::make('car.name')
                     ->label('Car')
                     ->sortable(),
-                TextColumn::make('fuel_type')
+                TextColumn::make('car.fuel_type')
                     ->label('Fuel')
-                    ->badge()
-                    ->placeholder('—'),
+                    ->badge(),
                 TextColumn::make('fuel_variant')
                     ->label('Variant')
                     ->placeholder('—'),

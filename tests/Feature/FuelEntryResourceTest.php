@@ -37,7 +37,6 @@ class FuelEntryResourceTest extends TestCase
         Livewire::test(CreateFuelEntry::class)
             ->fillForm([
                 'car_id' => $car->id,
-                'fuel_type' => 'gasoline',
                 'fuel_variant' => '95',
                 'gas_station' => 'Test Petrol Station',
                 'litres_filled' => 42.5,
@@ -64,7 +63,6 @@ class FuelEntryResourceTest extends TestCase
         Livewire::test(CreateFuelEntry::class)
             ->fillForm([
                 'car_id' => $car->id,
-                'fuel_type' => 'gasoline',
                 'fuel_variant' => '95',
                 'gas_station' => 'Test Petrol Station',
                 'litres_filled' => 42.5,
@@ -88,7 +86,6 @@ class FuelEntryResourceTest extends TestCase
         Livewire::test(CreateFuelEntry::class)
             ->fillForm([
                 'car_id' => $car->id,
-                'fuel_type' => 'gasoline',
                 'fuel_variant' => '95',
                 'gas_station' => 'Test Petrol Station',
                 'litres_filled' => 20,
@@ -155,34 +152,14 @@ class FuelEntryResourceTest extends TestCase
         $this->assertTrue($owner->can('delete', $entry));
     }
 
-    public function test_creating_an_entry_without_fuel_type_fails_validation(): void
-    {
-        $car = Car::factory()->create();
-        $this->actingAs($this->user());
-
-        Livewire::test(CreateFuelEntry::class)
-            ->fillForm([
-                'car_id' => $car->id,
-                'fuel_variant' => '95',
-                'gas_station' => 'Test Petrol Station',
-                'litres_filled' => 42.5,
-                'amount' => 5000,
-                'odometer_at_fill' => 12345,
-                'date_of_filling' => now(),
-            ])
-            ->call('create')
-            ->assertHasFormErrors(['fuel_type']);
-    }
-
     public function test_creating_a_non_electric_entry_without_fuel_variant_fails_validation(): void
     {
-        $car = Car::factory()->create();
+        $car = Car::factory()->create(['fuel_type' => FuelType::Diesel]);
         $this->actingAs($this->user());
 
         Livewire::test(CreateFuelEntry::class)
             ->fillForm([
                 'car_id' => $car->id,
-                'fuel_type' => 'diesel',
                 'gas_station' => 'Test Petrol Station',
                 'litres_filled' => 42.5,
                 'amount' => 5000,
@@ -195,13 +172,12 @@ class FuelEntryResourceTest extends TestCase
 
     public function test_creating_an_electric_entry_without_fuel_variant_succeeds(): void
     {
-        $car = Car::factory()->create();
+        $car = Car::factory()->create(['fuel_type' => FuelType::Electric]);
         $this->actingAs($this->user());
 
         Livewire::test(CreateFuelEntry::class)
             ->fillForm([
                 'car_id' => $car->id,
-                'fuel_type' => FuelType::Electric->value,
                 'gas_station' => 'Charging Station',
                 'litres_filled' => 42.5,
                 'amount' => 5000,
@@ -212,22 +188,21 @@ class FuelEntryResourceTest extends TestCase
             ->assertHasNoFormErrors();
 
         $entry = FuelEntry::firstOrFail();
-        $this->assertSame(FuelType::Electric, $entry->fuel_type);
+        $this->assertSame(FuelType::Electric, $entry->car->fuel_type);
         $this->assertNull($entry->fuel_variant);
     }
 
-    public function test_the_list_page_renders_a_legacy_entry_with_null_fuel_type_and_variant(): void
+    public function test_the_list_page_renders_an_entry_with_a_null_variant_using_the_cars_fuel_type(): void
     {
-        $car = Car::factory()->create();
+        $car = Car::factory()->create(['name' => 'Legacy Car', 'fuel_type' => FuelType::Gasoline]);
         $user = $this->user();
 
         // Raw insert bypassing the model/validation layer entirely --
-        // mirrors FuelEntryValidationRulesTest, since the factory always
-        // produces valid fuel_type/fuel_variant now.
+        // fuel_variant stays nullable even though the form requires it
+        // for a non-electric car.
         DB::table('fuel_entries')->insert([
             'car_id' => $car->id,
             'user_id' => $user->id,
-            'fuel_type' => null,
             'fuel_variant' => null,
             'gas_station' => 'Legacy Station',
             'litres_filled' => 10,
@@ -245,6 +220,7 @@ class FuelEntryResourceTest extends TestCase
 
         Livewire::test(ListFuelEntries::class)
             ->assertOk()
-            ->assertSee('Legacy Station');
+            ->assertSee('Legacy Station')
+            ->assertSee('Gasoline');
     }
 }

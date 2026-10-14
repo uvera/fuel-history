@@ -27,6 +27,7 @@ class ListFuelEntriesTool extends Tool
         $limit = $validated['limit'] ?? 10;
 
         $query = FuelEntry::query()
+            ->with('car')
             ->when(array_key_exists('car_id', $validated), fn ($q) => $q->where('car_id', $validated['car_id']))
             ->when(array_key_exists('user_id', $validated), fn ($q) => $q->where('user_id', $validated['user_id']))
             ->when(
@@ -41,7 +42,7 @@ class ListFuelEntriesTool extends Tool
         $entries = $query->get()->map(fn (FuelEntry $entry): array => [
             'id' => $entry->id,
             'car_id' => $entry->car_id,
-            'fuel_type' => $entry->fuel_type?->value,
+            'fuel_type' => $entry->car->fuel_type->value,
             'fuel_variant' => $entry->fuel_variant,
             'date_of_filling' => $entry->date_of_filling->toDateTimeString(),
             'gas_station' => $entry->gas_station,

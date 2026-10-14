@@ -20,15 +20,13 @@ class FuelEntryFactory extends Factory
      */
     public function definition(): array
     {
-        $fuelType = fake()->randomElement(FuelType::cases());
-
         return [
             'car_id' => Car::factory(),
             'user_id' => User::factory(),
-            'fuel_type' => $fuelType,
-            'fuel_variant' => $fuelType === FuelType::Electric
-                ? null
-                : fake()->randomElement(['95', '98', '100', 'B7']),
+            // Non-null until configure() can see the car. Electric cars
+            // are nulled there; if the car is not loaded yet, a non-null
+            // variant is fine.
+            'fuel_variant' => fake()->randomElement(['95', '98', '100', 'B7']),
             'gas_station' => fake()->company(),
             'litres_filled' => fake()->randomFloat(3, 5, 60),
             'amount' => fake()->randomFloat(2, 500, 8000),
@@ -37,6 +35,21 @@ class FuelEntryFactory extends Factory
             'is_partial_fill' => false,
             'trip_km' => null,
         ];
+    }
+
+    public function configure(): static
+    {
+        return $this->afterMaking(function (FuelEntry $entry): void {
+            if ($entry->car_id === null) {
+                return;
+            }
+
+            $car = Car::query()->find($entry->car_id);
+
+            if ($car?->fuel_type === FuelType::Electric) {
+                $entry->fuel_variant = null;
+            }
+        });
     }
 
     public function partial(): static

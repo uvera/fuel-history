@@ -22,7 +22,7 @@ class CarStationBreakdownWidget extends TableWidget
         return $table
             ->heading('Spend by station')
             ->records(function (): array {
-                $entries = $this->car->fuelEntries()->with('user')->get();
+                $entries = $this->car->fuelEntries()->with(['user', 'car'])->get();
                 $summary = app(AnalyticsService::class)->allTimeSummaryForCar($entries);
 
                 return $summary->byStation

@@ -42,11 +42,16 @@ class CarResourceTest extends TestCase
                 'model' => 'Golf',
                 'year' => 2018,
                 'plate' => 'BG-123-AB',
+                'fuel_type' => 'gasoline',
             ])
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $this->assertDatabaseHas('cars', ['name' => 'Family Golf', 'plate' => 'BG-123-AB']);
+        $this->assertDatabaseHas('cars', [
+            'name' => 'Family Golf',
+            'plate' => 'BG-123-AB',
+            'fuel_type' => 'gasoline',
+        ]);
     }
 
     public function test_regular_user_cannot_reach_the_create_car_page(): void
@@ -65,7 +70,8 @@ class CarResourceTest extends TestCase
         $this->get(CarResource::getUrl('index'))->assertOk();
 
         Livewire::test(ListCars::class)
-            ->assertCanSeeTableRecords(Car::all());
+            ->assertCanSeeTableRecords(Car::all())
+            ->assertSee('Gasoline');
     }
 
     public function test_regular_user_cannot_edit_a_car(): void

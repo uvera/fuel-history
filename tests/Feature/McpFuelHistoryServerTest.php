@@ -7,7 +7,6 @@ use App\Models\Car;
 use App\Models\FuelEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -36,30 +35,6 @@ class McpFuelHistoryServerTest extends TestCase
     private function toolText(TestResponse $response): string
     {
         return $response->json('result.content.0.text');
-    }
-
-    /**
-     * Raw-inserts a legacy fuel entry with fuel_type/fuel_variant both NULL,
-     * bypassing the model/validation layer entirely -- mirrors
-     * FuelEntryValidationRulesTest::test_fuel_type_and_fuel_variant_columns_are_nullable_in_the_database,
-     * since the factory always produces valid fuel_type/fuel_variant now.
-     */
-    private function createLegacyEntryWithoutFuelType(User $user, Car $car): int
-    {
-        return DB::table('fuel_entries')->insertGetId([
-            'car_id' => $car->id,
-            'user_id' => $user->id,
-            'fuel_type' => null,
-            'fuel_variant' => null,
-            'gas_station' => 'Legacy Station',
-            'litres_filled' => 10,
-            'amount' => 1000,
-            'odometer_at_fill' => 500,
-            'date_of_filling' => now(),
-            'is_partial_fill' => false,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
     }
 
     public function test_unauthenticated_request_is_rejected(): void
@@ -92,6 +67,7 @@ class McpFuelHistoryServerTest extends TestCase
         $text = $this->toolText($response);
 
         $this->assertStringContainsString('Active Car', $text);
+        $this->assertStringContainsString('"fuel_type": "gasoline"', $text);
         $this->assertStringNotContainsString('Archived Car', $text);
     }
 
@@ -115,7 +91,6 @@ class McpFuelHistoryServerTest extends TestCase
 
         $response = $this->callTool($token, 'add-fuel-entry', [
             'car_id' => $car->id,
-            'fuel_type' => 'gasoline',
             'fuel_variant' => '95',
             'gas_station' => 'Test Station',
             'litres_filled' => 40.5,
@@ -140,7 +115,6 @@ class McpFuelHistoryServerTest extends TestCase
 
         $response = $this->callTool($token, 'add-fuel-entry', [
             'car_id' => $car->id,
-            'fuel_type' => 'gasoline',
             'fuel_variant' => '95',
             'gas_station' => 'Test Station',
             'litres_filled' => 40.5,
@@ -161,7 +135,6 @@ class McpFuelHistoryServerTest extends TestCase
 
         $response = $this->callTool($token, 'add-fuel-entry', [
             'car_id' => $car->id,
-            'fuel_type' => 'gasoline',
             'fuel_variant' => '95',
             'gas_station' => 'Test Station',
             'litres_filled' => -5, // invalid: must be positive
@@ -275,15 +248,39 @@ class McpFuelHistoryServerTest extends TestCase
         $this->assertTrue((bool) $response->json('result.isError'));
     }
 
-    public function test_add_fuel_entry_requires_fuel_type(): void
+    public function test_add_fuel_entry_uses_the_cars_fuel_type(): void
     {
         $user = User::factory()->create();
         $token = $this->tokenFor($user);
-        $car = Car::factory()->create();
+        $car = Car::factory()->create(['fuel_type' => FuelType::Diesel]);
 
         $response = $this->callTool($token, 'add-fuel-entry', [
             'car_id' => $car->id,
-            'fuel_variant' => '95',
+            'fuel_variant' => 'B7',
+            'gas_station' => 'Test Station',
+            'litres_filled' => 40.5,
+            'amount' => 5000,
+            'odometer_at_fill' => 12345,
+            'date_of_filling' => '2026-08-25 10:00:00',
+        ]);
+
+        $response->assertOk();
+        $this->assertFalse((bool) $response->json('result.isError'));
+        $this->assertSame(1, FuelEntry::count());
+
+        $listed = $this->callTool($token, 'list-fuel-entries', ['car_id' => $car->id]);
+        $this->assertStringContainsString('diesel', $this->toolText($listed));
+        $this->assertStringContainsString('B7', $this->toolText($listed));
+    }
+
+    public function test_add_fuel_entry_requires_fuel_variant_when_the_car_is_not_electric(): void
+    {
+        $user = User::factory()->create();
+        $token = $this->tokenFor($user);
+        $car = Car::factory()->create(['fuel_type' => FuelType::Diesel]);
+
+        $response = $this->callTool($token, 'add-fuel-entry', [
+            'car_id' => $car->id,
             'gas_station' => 'Test Station',
             'litres_filled' => 40.5,
             'amount' => 5000,
@@ -295,35 +292,14 @@ class McpFuelHistoryServerTest extends TestCase
         $this->assertTrue((bool) $response->json('result.isError'));
     }
 
-    public function test_add_fuel_entry_requires_fuel_variant_when_not_electric(): void
+    public function test_add_fuel_entry_allows_missing_fuel_variant_when_the_car_is_electric(): void
     {
         $user = User::factory()->create();
         $token = $this->tokenFor($user);
-        $car = Car::factory()->create();
+        $car = Car::factory()->create(['fuel_type' => FuelType::Electric]);
 
         $response = $this->callTool($token, 'add-fuel-entry', [
             'car_id' => $car->id,
-            'fuel_type' => 'diesel',
-            'gas_station' => 'Test Station',
-            'litres_filled' => 40.5,
-            'amount' => 5000,
-            'odometer_at_fill' => 12345,
-            'date_of_filling' => '2026-08-25 10:00:00',
-        ]);
-
-        $this->assertSame(0, FuelEntry::count());
-        $this->assertTrue((bool) $response->json('result.isError'));
-    }
-
-    public function test_add_fuel_entry_allows_missing_fuel_variant_when_electric(): void
-    {
-        $user = User::factory()->create();
-        $token = $this->tokenFor($user);
-        $car = Car::factory()->create();
-
-        $response = $this->callTool($token, 'add-fuel-entry', [
-            'car_id' => $car->id,
-            'fuel_type' => 'electric',
             'gas_station' => 'Charging Station',
             'litres_filled' => 40.5,
             'amount' => 5000,
@@ -337,88 +313,109 @@ class McpFuelHistoryServerTest extends TestCase
         $this->assertNull($entry->fuel_variant);
     }
 
-    public function test_edit_fuel_entry_can_change_just_fuel_type_without_resending_fuel_variant(): void
+    public function test_edit_fuel_entry_can_move_to_another_car_without_resending_fuel_variant(): void
     {
         $user = User::factory()->create();
         $token = $this->tokenFor($user);
-        $entry = FuelEntry::factory()->create(['user_id' => $user->id, 'fuel_type' => FuelType::Diesel, 'fuel_variant' => 'B7']);
+        $from = Car::factory()->create(['fuel_type' => FuelType::Diesel]);
+        $to = Car::factory()->create(['fuel_type' => FuelType::Gasoline]);
+        $entry = FuelEntry::factory()->create([
+            'user_id' => $user->id,
+            'car_id' => $from->id,
+            'fuel_variant' => 'B7',
+        ]);
 
         $response = $this->callTool($token, 'edit-fuel-entry', [
             'entry_id' => $entry->id,
-            'fuel_type' => 'gasoline',
+            'car_id' => $to->id,
         ]);
 
         $response->assertOk();
         $this->assertFalse((bool) $response->json('result.isError'));
-        $this->assertSame(FuelType::Gasoline, $entry->refresh()->fuel_type);
+        $entry->refresh();
+        $this->assertSame($to->id, $entry->car_id);
         $this->assertSame('B7', $entry->fuel_variant);
+        $this->assertSame(FuelType::Gasoline, $entry->car->fuel_type);
     }
 
-    public function test_edit_fuel_entry_rejects_setting_fuel_type_on_a_legacy_entry_without_a_fuel_variant(): void
+    public function test_edit_fuel_entry_rejects_moving_a_variantless_entry_onto_a_non_electric_car(): void
     {
         $user = User::factory()->create();
         $token = $this->tokenFor($user);
-        $car = Car::factory()->create();
-        $entryId = $this->createLegacyEntryWithoutFuelType($user, $car);
-
-        $response = $this->callTool($token, 'edit-fuel-entry', [
-            'entry_id' => $entryId,
-            'fuel_type' => 'diesel',
+        $electric = Car::factory()->create(['fuel_type' => FuelType::Electric]);
+        $gasoline = Car::factory()->create(['fuel_type' => FuelType::Gasoline]);
+        $entry = FuelEntry::factory()->create([
+            'user_id' => $user->id,
+            'car_id' => $electric->id,
         ]);
-
-        $this->assertTrue((bool) $response->json('result.isError'));
-        $entry = FuelEntry::find($entryId);
-        $this->assertNull($entry->fuel_type);
         $this->assertNull($entry->fuel_variant);
-    }
-
-    public function test_edit_fuel_entry_rejects_explicit_null_fuel_variant_alongside_non_electric_fuel_type(): void
-    {
-        $user = User::factory()->create();
-        $token = $this->tokenFor($user);
-        $entry = FuelEntry::factory()->create(['user_id' => $user->id, 'fuel_type' => FuelType::Diesel, 'fuel_variant' => 'B7']);
 
         $response = $this->callTool($token, 'edit-fuel-entry', [
             'entry_id' => $entry->id,
-            'fuel_type' => 'diesel',
+            'car_id' => $gasoline->id,
+        ]);
+
+        $this->assertTrue((bool) $response->json('result.isError'));
+        $entry->refresh();
+        $this->assertSame($electric->id, $entry->car_id);
+        $this->assertNull($entry->fuel_variant);
+    }
+
+    public function test_edit_fuel_entry_rejects_explicit_null_fuel_variant_on_a_non_electric_car(): void
+    {
+        $user = User::factory()->create();
+        $token = $this->tokenFor($user);
+        $car = Car::factory()->create(['fuel_type' => FuelType::Diesel]);
+        $entry = FuelEntry::factory()->create([
+            'user_id' => $user->id,
+            'car_id' => $car->id,
+            'fuel_variant' => 'B7',
+        ]);
+
+        $response = $this->callTool($token, 'edit-fuel-entry', [
+            'entry_id' => $entry->id,
             'fuel_variant' => null,
         ]);
 
         $this->assertTrue((bool) $response->json('result.isError'));
         $entry->refresh();
-        $this->assertSame(FuelType::Diesel, $entry->fuel_type);
+        $this->assertSame(FuelType::Diesel, $entry->car->fuel_type);
         $this->assertSame('B7', $entry->fuel_variant);
     }
 
-    public function test_edit_fuel_entry_allows_unrelated_edit_on_legacy_entry_without_touching_fuel_type(): void
+    public function test_edit_fuel_entry_allows_unrelated_edit_on_an_electric_car_without_a_variant(): void
     {
         $user = User::factory()->create();
         $token = $this->tokenFor($user);
-        $car = Car::factory()->create();
-        $entryId = $this->createLegacyEntryWithoutFuelType($user, $car);
+        $car = Car::factory()->create(['fuel_type' => FuelType::Electric]);
+        $entry = FuelEntry::factory()->create([
+            'user_id' => $user->id,
+            'car_id' => $car->id,
+            'gas_station' => 'Legacy Station',
+        ]);
+        $this->assertNull($entry->fuel_variant);
 
         $response = $this->callTool($token, 'edit-fuel-entry', [
-            'entry_id' => $entryId,
+            'entry_id' => $entry->id,
             'gas_station' => 'Updated Legacy Station',
         ]);
 
         $response->assertOk();
         $this->assertFalse((bool) $response->json('result.isError'));
-        $entry = FuelEntry::find($entryId);
+        $entry->refresh();
         $this->assertSame('Updated Legacy Station', $entry->gas_station);
-        $this->assertNull($entry->fuel_type);
         $this->assertNull($entry->fuel_variant);
+        $this->assertSame(FuelType::Electric, $entry->car->fuel_type);
     }
 
     public function test_list_fuel_entries_includes_fuel_type_and_variant(): void
     {
         $user = User::factory()->create();
         $token = $this->tokenFor($user);
-        $car = Car::factory()->create();
+        $car = Car::factory()->create(['fuel_type' => FuelType::Lpg]);
         FuelEntry::factory()->create([
             'car_id' => $car->id,
             'user_id' => $user->id,
-            'fuel_type' => FuelType::Lpg,
             'fuel_variant' => 'Autogas',
         ]);
 

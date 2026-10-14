@@ -2,6 +2,8 @@
 
 namespace Tests\Unit;
 
+use App\Enums\FuelType;
+use App\Models\Car;
 use App\Models\FuelEntry;
 use App\Services\AnalyticsPeriod;
 use App\Services\AnalyticsService;
@@ -27,8 +29,8 @@ class AnalyticsServiceTest extends TestCase
         float $amount,
         bool $isPartial = false,
         string $gasStation = 'Test',
-        ?string $fuelType = null,
         ?string $fuelVariant = null,
+        ?Car $car = null,
     ): FuelEntry {
         $entry = new FuelEntry([
             'gas_station' => $gasStation,
@@ -37,10 +39,10 @@ class AnalyticsServiceTest extends TestCase
             'odometer_at_fill' => $odometer,
             'date_of_filling' => $date,
             'is_partial_fill' => $isPartial,
-            'fuel_type' => $fuelType,
             'fuel_variant' => $fuelVariant,
         ]);
         $entry->id = $id;
+        $entry->setRelation('car', $car ?? new Car(['fuel_type' => FuelType::Gasoline]));
 
         return $entry;
     }
@@ -248,10 +250,13 @@ class AnalyticsServiceTest extends TestCase
 
     public function test_all_time_summary_breaks_down_spend_and_efficiency_by_fuel_type_and_variant(): void
     {
+        // One car, so the breakdown splits by variant only: 95, and a
+        // fill with no variant.
+        $car = new Car(['fuel_type' => FuelType::Gasoline]);
         $entries = new Collection([
-            $this->entry(1, '2026-01-01', 10000, 40, 4000, fuelType: 'gasoline', fuelVariant: '95'),
-            $this->entry(2, '2026-01-10', 10500, 50, 5000, fuelType: 'gasoline', fuelVariant: '95'), // closes a 10.0 L/100km stretch
-            $this->entry(3, '2026-01-20', 11000, 10, 1000, fuelType: 'lpg', fuelVariant: null),
+            $this->entry(1, '2026-01-01', 10000, 40, 4000, fuelVariant: '95', car: $car),
+            $this->entry(2, '2026-01-10', 10500, 50, 5000, fuelVariant: '95', car: $car), // closes a 10.0 L/100km stretch
+            $this->entry(3, '2026-01-20', 11000, 10, 1000, fuelVariant: null, car: $car),
         ]);
 
         $summary = $this->service->allTimeSummaryForCar($entries);
@@ -259,14 +264,14 @@ class AnalyticsServiceTest extends TestCase
         $this->assertCount(2, $summary->byFuelType);
 
         $gasoline95 = $summary->byFuelType->first(fn ($row) => $row->fuelType?->value === 'gasoline' && $row->fuelVariant === '95');
-        $lpg = $summary->byFuelType->first(fn ($row) => $row->fuelType?->value === 'lpg');
+        $gasoline = $summary->byFuelType->first(fn ($row) => $row->fuelType?->value === 'gasoline' && $row->fuelVariant === null);
 
         $this->assertSame(2, $gasoline95->fillUpCount);
         $this->assertEqualsWithDelta(10.0, $gasoline95->averageL100km, 0.0001);
-        $this->assertSame(1, $lpg->fillUpCount);
+        $this->assertSame(1, $gasoline->fillUpCount);
         // Entry 3 also closes a stretch (10L over 500km since the previous
-        // full fill) even though it's a different fuel type/variant.
-        $this->assertEqualsWithDelta(2.0, $lpg->averageL100km, 0.0001);
+        // full fill) even though it has no variant.
+        $this->assertEqualsWithDelta(2.0, $gasoline->averageL100km, 0.0001);
     }
 
     public function test_all_time_summary_handles_car_with_no_entries(): void

@@ -161,17 +161,17 @@ class AnalyticsService
     private function byFuelType(Collection $rows, Collection $stretches): Collection
     {
         $l100kmSamplesByKey = $stretches
-            ->groupBy(fn (FuelStretch $stretch) => $this->fuelTypeKey($stretch->closingEntry->fuel_type?->value, $stretch->closingEntry->fuel_variant))
+            ->groupBy(fn (FuelStretch $stretch) => $this->fuelTypeKey($this->carFuelTypeValue($stretch->closingEntry), $stretch->closingEntry->fuel_variant))
             ->map(fn (Collection $group) => $group->pluck('l100km')->all());
 
         return $rows
-            ->groupBy(fn ($row) => $this->fuelTypeKey($row->entry->fuel_type?->value, $row->entry->fuel_variant))
+            ->groupBy(fn ($row) => $this->fuelTypeKey($this->carFuelTypeValue($row->entry), $row->entry->fuel_variant))
             ->map(function (Collection $group, string $key) use ($l100kmSamplesByKey) {
                 $first = $group->first()->entry;
                 $samples = $l100kmSamplesByKey->get($key, []);
 
                 return new FuelTypeBreakdown(
-                    $first->fuel_type,
+                    $first->car?->fuel_type,
                     $first->fuel_variant,
                     (float) $group->sum(fn ($row) => (float) $row->entry->amount),
                     (float) $group->sum(fn ($row) => (float) $row->entry->litres_filled),
@@ -180,6 +180,11 @@ class AnalyticsService
                 );
             })
             ->values();
+    }
+
+    private function carFuelTypeValue(FuelEntry $entry): ?string
+    {
+        return $entry->car?->fuel_type?->value;
     }
 
     private function fuelTypeKey(?string $fuelType, ?string $fuelVariant): string

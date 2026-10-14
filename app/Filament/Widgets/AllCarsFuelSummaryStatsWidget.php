@@ -11,7 +11,7 @@ class AllCarsFuelSummaryStatsWidget extends StatsOverviewWidget
 {
     protected function getStats(): array
     {
-        $entriesByCar = Car::query()->with('fuelEntries')->get()->map(fn (Car $car) => $car->fuelEntries);
+        $entriesByCar = Car::query()->with('fuelEntries.car')->get()->map(fn (Car $car) => $car->fuelEntries);
         $summary = app(AnalyticsService::class)->allTimeSummaryGlobal($entriesByCar);
 
         return [

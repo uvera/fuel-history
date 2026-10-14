@@ -5,7 +5,10 @@ namespace Tests\Feature;
 use App\Enums\FuelType;
 use App\Models\Car;
 use App\Models\FuelEntry;
+use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
@@ -27,20 +30,24 @@ class FuelEntryValidationRulesTest extends TestCase
         ];
     }
 
-    public function test_fuel_type_and_fuel_variant_columns_are_nullable_in_the_database(): void
+    public function test_fuel_variant_is_nullable_and_fuel_type_lives_on_the_car(): void
     {
-        $this->assertTrue(Schema::hasColumn('fuel_entries', 'fuel_type'));
+        $this->assertFalse(Schema::hasColumn('fuel_entries', 'fuel_type'));
         $this->assertTrue(Schema::hasColumn('fuel_entries', 'fuel_variant'));
+        $this->assertTrue(Schema::hasColumn('cars', 'fuel_type'));
+
+        $column = collect(Schema::getColumns('cars'))->firstWhere('name', 'fuel_type');
+        $this->assertFalse($column['nullable']);
+        $this->assertNull($column['default']);
 
         $car = Car::factory()->create();
-        $userId = \App\Models\User::factory()->create()->id;
+        $userId = User::factory()->create()->id;
 
         // Raw insert bypassing the model/validation layer entirely --
-        // proves the DB itself does not enforce NOT NULL on these columns.
+        // proves the DB itself does not enforce NOT NULL on fuel_variant.
         DB::table('fuel_entries')->insert([
             'car_id' => $car->id,
             'user_id' => $userId,
-            'fuel_type' => null,
             'fuel_variant' => null,
             'gas_station' => 'Legacy Station',
             'litres_filled' => 10,
@@ -54,13 +61,30 @@ class FuelEntryValidationRulesTest extends TestCase
 
         $this->assertDatabaseHas('fuel_entries', [
             'gas_station' => 'Legacy Station',
-            'fuel_type' => null,
+            'fuel_variant' => null,
         ]);
+
+        try {
+            DB::table('cars')->insert([
+                'name' => 'No Fuel Type',
+                'fuel_type' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $this->fail('A car without a fuel type should be rejected by the database.');
+        } catch (QueryException) {
+            $this->assertTrue(true);
+        }
     }
 
-    public function test_create_validation_requires_fuel_type(): void
+    public function test_create_validation_does_not_accept_a_fuel_type_on_the_fill(): void
     {
-        $car = Car::factory()->create();
+        $this->assertArrayNotHasKey('fuel_type', FuelEntry::validationRules());
+    }
+
+    public function test_create_validation_requires_fuel_variant_when_the_car_is_not_electric(): void
+    {
+        $car = Car::factory()->create(['fuel_type' => FuelType::Gasoline]);
 
         $validator = Validator::make(
             $this->baseData($car),
@@ -68,15 +92,39 @@ class FuelEntryValidationRulesTest extends TestCase
         );
 
         $this->assertTrue($validator->fails());
-        $this->assertArrayHasKey('fuel_type', $validator->errors()->toArray());
+        $this->assertArrayHasKey('fuel_variant', $validator->errors()->toArray());
     }
 
-    public function test_create_validation_requires_fuel_variant_when_fuel_type_is_not_electric(): void
+    public function test_create_validation_allows_missing_fuel_variant_when_the_car_is_electric(): void
     {
-        $car = Car::factory()->create();
+        $car = Car::factory()->create(['fuel_type' => FuelType::Electric]);
 
         $validator = Validator::make(
-            [...$this->baseData($car), 'fuel_type' => FuelType::Gasoline->value],
+            $this->baseData($car),
+            FuelEntry::validationRules(),
+        );
+
+        $this->assertFalse($validator->fails());
+    }
+
+    public function test_create_validation_allows_explicit_null_fuel_variant_when_the_car_is_electric(): void
+    {
+        $car = Car::factory()->create(['fuel_type' => FuelType::Electric]);
+
+        $validator = Validator::make(
+            [...$this->baseData($car), 'fuel_variant' => null],
+            FuelEntry::validationRules(),
+        );
+
+        $this->assertFalse($validator->fails());
+    }
+
+    public function test_create_validation_rejects_explicit_null_fuel_variant_when_the_car_is_not_electric(): void
+    {
+        $car = Car::factory()->create(['fuel_type' => FuelType::Diesel]);
+
+        $validator = Validator::make(
+            [...$this->baseData($car), 'fuel_variant' => null],
             FuelEntry::validationRules(),
         );
 
@@ -84,44 +132,7 @@ class FuelEntryValidationRulesTest extends TestCase
         $this->assertArrayHasKey('fuel_variant', $validator->errors()->toArray());
     }
 
-    public function test_create_validation_allows_missing_fuel_variant_when_fuel_type_is_electric(): void
-    {
-        $car = Car::factory()->create();
-
-        $validator = Validator::make(
-            [...$this->baseData($car), 'fuel_type' => FuelType::Electric->value],
-            FuelEntry::validationRules(),
-        );
-
-        $this->assertFalse($validator->fails());
-    }
-
-    public function test_create_validation_allows_explicit_null_fuel_variant_when_fuel_type_is_electric(): void
-    {
-        $car = Car::factory()->create();
-
-        $validator = Validator::make(
-            [...$this->baseData($car), 'fuel_type' => FuelType::Electric->value, 'fuel_variant' => null],
-            FuelEntry::validationRules(),
-        );
-
-        $this->assertFalse($validator->fails());
-    }
-
-    public function test_create_validation_rejects_explicit_null_fuel_variant_when_fuel_type_is_not_electric(): void
-    {
-        $car = Car::factory()->create();
-
-        $validator = Validator::make(
-            [...$this->baseData($car), 'fuel_type' => FuelType::Diesel->value, 'fuel_variant' => null],
-            FuelEntry::validationRules(),
-        );
-
-        $this->assertTrue($validator->fails());
-        $this->assertArrayHasKey('fuel_variant', $validator->errors()->toArray());
-    }
-
-    public function test_edit_validation_allows_omitting_fuel_type_and_fuel_variant_entirely(): void
+    public function test_edit_validation_allows_omitting_fuel_variant_entirely(): void
     {
         $validator = Validator::make(
             ['gas_station' => 'Updated Station'],
@@ -129,5 +140,30 @@ class FuelEntryValidationRulesTest extends TestCase
         );
 
         $this->assertFalse($validator->fails());
+    }
+
+    public function test_effective_state_requires_a_variant_when_the_car_is_not_electric(): void
+    {
+        $gasoline = Car::factory()->create(['fuel_type' => FuelType::Gasoline]);
+        $electric = Car::factory()->create(['fuel_type' => FuelType::Electric]);
+
+        $missingOnGasoline = Validator::make(
+            ['car_id' => $gasoline->id, 'fuel_variant' => null],
+            Arr::only(FuelEntry::validationRules(), ['fuel_variant']),
+        );
+        $this->assertTrue($missingOnGasoline->fails());
+        $this->assertArrayHasKey('fuel_variant', $missingOnGasoline->errors()->toArray());
+
+        $missingOnElectric = Validator::make(
+            ['car_id' => $electric->id, 'fuel_variant' => null],
+            Arr::only(FuelEntry::validationRules(), ['fuel_variant']),
+        );
+        $this->assertFalse($missingOnElectric->fails());
+
+        $keptVariant = Validator::make(
+            ['car_id' => $gasoline->id, 'fuel_variant' => '95'],
+            Arr::only(FuelEntry::validationRules(), ['fuel_variant']),
+        );
+        $this->assertFalse($keptVariant->fails());
     }
 }

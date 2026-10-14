@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\FuelType;
 use App\Models\Car;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -23,6 +24,7 @@ class CarFactory extends Factory
             'model' => fake()->word(),
             'year' => fake()->numberBetween(2000, (int) date('Y')),
             'plate' => strtoupper(fake()->bothify('??-###-??')),
+            'fuel_type' => FuelType::Gasoline,
         ];
     }
 }
