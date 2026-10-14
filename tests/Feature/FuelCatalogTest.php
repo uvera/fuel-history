@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\FuelType;
 use App\Models\Car;
 use App\Models\FuelEntry;
 use App\Models\FuelStation;
@@ -200,5 +201,76 @@ class FuelCatalogTest extends TestCase
         }
 
         $this->assertModelExists($otherGrade);
+    }
+
+    public function test_merging_stations_keeps_distinct_variants_and_combines_matching_names(): void
+    {
+        $source = FuelStation::factory()->create(['name' => 'OMV Petrol']);
+        $target = FuelStation::factory()->create(['name' => 'OMV']);
+        $sourceGrade = FuelVariant::factory()->create([
+            'fuel_station_id' => $source->id,
+            'name' => '95',
+        ]);
+        $targetGrade = FuelVariant::factory()->create([
+            'fuel_station_id' => $target->id,
+            'name' => '95',
+        ]);
+        $onlyOnSource = FuelVariant::factory()->create([
+            'fuel_station_id' => $source->id,
+            'name' => 'B7',
+        ]);
+        $matchingEntry = FuelEntry::factory()->create([
+            'gas_station' => 'OMV Petrol',
+            'fuel_variant' => '95',
+        ]);
+        $keptVariantEntry = FuelEntry::factory()->create([
+            'gas_station' => 'OMV Petrol',
+            'fuel_variant' => 'B7',
+        ]);
+        $chargeless = FuelEntry::factory()->create([
+            'car_id' => Car::factory()->create(['fuel_type' => FuelType::Electric])->id,
+            'gas_station' => 'OMV Petrol',
+        ]);
+
+        $result = app(FuelCatalog::class)->mergeStations($source, $target);
+
+        $this->assertSame(3, $result->entriesMoved);
+        $this->assertSame(1, $result->variantsMoved);
+        $this->assertSame(1, $result->variantsCombined);
+        $this->assertModelMissing($source);
+        $this->assertModelMissing($sourceGrade);
+
+        $matchingEntry->refresh();
+        $this->assertSame($target->id, $matchingEntry->fuel_station_id);
+        $this->assertSame($targetGrade->id, $matchingEntry->fuel_variant_id);
+        $this->assertSame('OMV', $matchingEntry->gas_station);
+        $this->assertSame('95', $matchingEntry->fuel_variant);
+
+        $keptVariantEntry->refresh();
+        $onlyOnSource->refresh();
+        $this->assertSame($target->id, $onlyOnSource->fuel_station_id);
+        $this->assertSame($onlyOnSource->id, $keptVariantEntry->fuel_variant_id);
+        $this->assertSame('B7', $keptVariantEntry->fuel_variant);
+        $this->assertSame('OMV', $keptVariantEntry->gas_station);
+
+        $chargeless->refresh();
+        $this->assertSame($target->id, $chargeless->fuel_station_id);
+        $this->assertNull($chargeless->fuel_variant_id);
+        $this->assertSame('OMV', $chargeless->gas_station);
+        $this->assertSame(2, $target->variants()->count());
+    }
+
+    public function test_a_station_cannot_be_merged_into_itself(): void
+    {
+        $station = FuelStation::factory()->create(['name' => 'OMV']);
+
+        try {
+            app(FuelCatalog::class)->mergeStations($station, $station);
+            $this->fail('A station should not merge into itself.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('target_id', $exception->errors());
+        }
+
+        $this->assertModelExists($station);
     }
 }

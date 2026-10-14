@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\FuelStations\FuelStationResource;
 use App\Filament\Resources\FuelStations\Pages\CreateFuelStation;
 use App\Filament\Resources\FuelStations\Pages\EditFuelStation;
 use App\Filament\Resources\FuelStations\Pages\ListFuelStations;
@@ -174,5 +175,63 @@ class FuelStationResourceTest extends TestCase
         $this->assertSame('95', $entry->fuel_variant);
         $this->assertModelMissing($alias);
         $this->assertModelExists($unrelated);
+    }
+
+    public function test_a_station_can_be_merged_into_another_from_the_list(): void
+    {
+        $source = FuelStation::factory()->create(['name' => 'OMV Petrol']);
+        $target = FuelStation::factory()->create(['name' => 'OMV']);
+        $shared = FuelVariant::factory()->create([
+            'fuel_station_id' => $target->id,
+            'name' => '95',
+        ]);
+        FuelVariant::factory()->create([
+            'fuel_station_id' => $source->id,
+            'name' => '95',
+        ]);
+        $diesel = FuelVariant::factory()->create([
+            'fuel_station_id' => $source->id,
+            'name' => 'B7',
+        ]);
+        $entry = FuelEntry::factory()->create([
+            'gas_station' => 'OMV Petrol',
+            'fuel_variant' => 'B7',
+        ]);
+        $this->actingAs($this->user());
+
+        Livewire::test(ListFuelStations::class)
+            ->callAction(TestAction::make('merge')->table($source), data: [
+                'target_id' => $target->id,
+            ])
+            ->assertHasNoActionErrors()
+            ->assertNotified('Stations merged');
+
+        $entry->refresh();
+        $diesel->refresh();
+        $this->assertSame($target->id, $entry->fuel_station_id);
+        $this->assertSame($diesel->id, $entry->fuel_variant_id);
+        $this->assertSame($target->id, $diesel->fuel_station_id);
+        $this->assertSame('OMV', $entry->gas_station);
+        $this->assertModelMissing($source);
+        $this->assertTrue($target->variants()->whereKey($shared->id)->exists());
+        $this->assertTrue($target->variants()->whereKey($diesel->id)->exists());
+    }
+
+    public function test_merging_the_open_station_opens_the_station_that_was_kept(): void
+    {
+        $source = FuelStation::factory()->create(['name' => 'NIS Petrol']);
+        $target = FuelStation::factory()->create(['name' => 'NIS']);
+        $this->actingAs($this->user());
+
+        Livewire::test(EditFuelStation::class, ['record' => $source->id])
+            ->callAction('merge', data: [
+                'target_id' => $target->id,
+            ])
+            ->assertHasNoActionErrors()
+            ->assertNotified('Stations merged')
+            ->assertRedirect(FuelStationResource::getUrl('edit', ['record' => $target]));
+
+        $this->assertModelMissing($source);
+        $this->assertModelExists($target);
     }
 }

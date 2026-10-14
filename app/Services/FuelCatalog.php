@@ -6,10 +6,12 @@ use App\Models\FuelEntry;
 use App\Models\FuelStation;
 use App\Models\FuelVariant;
 use App\Services\Data\FuelCatalogResolution;
+use App\Services\Data\FuelStationMergeResult;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use RuntimeException;
 
 /**
  * Turns station and variant names into one shared catalog.
@@ -212,6 +214,64 @@ class FuelCatalog
             $source->delete();
 
             return $moved;
+        });
+    }
+
+    /**
+     * Move the source station's fills and variants onto the target, then
+     * remove the source. A variant whose name already exists on the target
+     * is combined into that variant. Every other variant is kept as its
+     * own row on the target station.
+     */
+    public function mergeStations(FuelStation $source, FuelStation $target): FuelStationMergeResult
+    {
+        if ($source->is($target)) {
+            throw ValidationException::withMessages([
+                'target_id' => 'Choose a different fuel station to keep.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($source, $target): FuelStationMergeResult {
+            $entriesMoved = 0;
+            $variantsMoved = 0;
+            $variantsCombined = 0;
+
+            $source->variants()->orderBy('id')->get()->each(function (FuelVariant $variant) use ($target, &$entriesMoved, &$variantsMoved, &$variantsCombined): void {
+                $existing = $target->variants()->where('name_key', $variant->name_key)->first();
+
+                if ($existing !== null) {
+                    $entriesMoved += $variant->fuelEntries()->update([
+                        'fuel_station_id' => $target->id,
+                        'gas_station' => $target->name,
+                        'fuel_variant_id' => $existing->id,
+                        'fuel_variant' => $existing->name,
+                    ]);
+                    $variant->delete();
+                    $variantsCombined++;
+
+                    return;
+                }
+
+                $variant->fuel_station_id = $target->id;
+                $variant->save();
+
+                $entriesMoved += $variant->fuelEntries()->update([
+                    'fuel_station_id' => $target->id,
+                    'gas_station' => $target->name,
+                ]);
+                $variantsMoved++;
+            });
+
+            $entriesMoved += $source->fuelEntries()->update([
+                'fuel_station_id' => $target->id,
+                'gas_station' => $target->name,
+            ]);
+
+            if ($source->delete() === false) {
+                throw new RuntimeException('The fuel station could not be removed.');
+            }
+
+            return new FuelStationMergeResult($entriesMoved, $variantsMoved, $variantsCombined);
         });
     }
 
