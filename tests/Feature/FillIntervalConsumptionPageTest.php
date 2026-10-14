@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Enums\FuelType;
 use App\Filament\Pages\CarFuelHistory;
 use App\Models\Car;
 use App\Models\FuelEntry;
@@ -26,7 +25,6 @@ class FillIntervalConsumptionPageTest extends TestCase
         $shared = [
             'car_id' => $car->id,
             'user_id' => $user->id,
-            'fuel_type' => FuelType::Gasoline,
             'fuel_variant' => '95',
             'is_partial_fill' => false,
         ];
@@ -67,7 +65,6 @@ class FillIntervalConsumptionPageTest extends TestCase
         FuelEntry::factory()->create([
             'car_id' => $otherCar->id,
             'user_id' => $user->id,
-            'fuel_type' => FuelType::Diesel,
             'fuel_variant' => 'B7',
             'gas_station' => 'Other Car Only',
             'odometer_at_fill' => 5000,
