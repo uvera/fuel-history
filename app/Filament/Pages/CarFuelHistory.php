@@ -3,16 +3,23 @@
 namespace App\Filament\Pages;
 
 use App\Models\Car;
+use App\Models\FuelEntry;
+use App\Services\Data\FillIntervalResult;
 use App\Services\Data\FuelEntryRow;
+use App\Services\FillIntervalConsumption;
 use App\Services\FuelStretchService;
 use BackedEnum;
+use Filament\Forms\Components\Select;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Illuminate\Support\Collection;
 
 class CarFuelHistory extends Page implements HasTable
 {
@@ -28,9 +35,52 @@ class CarFuelHistory extends Page implements HasTable
 
     public Car $record;
 
+    /**
+     * Left empty until the user picks a fill, so the page does not render
+     * a second copy of a table figure before anyone asks for a comparison.
+     */
+    public int|string|null $startFillId = null;
+
+    public int|string|null $endFillId = null;
+
     public function mount(Car $record): void
     {
         $this->record = $record;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function getViewData(): array
+    {
+        return [
+            'interval' => $this->fillInterval(),
+        ];
+    }
+
+    public function intervalForm(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                Section::make('Average consumption between two fills')
+                    ->description('Litres from every fill after the start fill through the end fill, over the kilometres between the two odometer readings.')
+                    ->schema([
+                        Select::make('startFillId')
+                            ->label('Start fill')
+                            ->options(fn (): array => $this->fillOptions())
+                            ->placeholder('Select a fill')
+                            ->live(),
+                        Select::make('endFillId')
+                            ->label('End fill')
+                            ->options(fn (): array => $this->fillOptions())
+                            ->placeholder('Select a fill')
+                            ->live(),
+                    ])
+                    ->columns([
+                        'default' => 1,
+                        'md' => 2,
+                    ]),
+            ]);
     }
 
     public function getTitle(): string
@@ -108,5 +158,68 @@ class CarFuelHistory extends Page implements HasTable
                 TextColumn::make('logged_by')
                     ->label('Logged by'),
             ]);
+    }
+
+    private function fillInterval(): ?FillIntervalResult
+    {
+        if (blank($this->startFillId) || blank($this->endFillId)) {
+            return null;
+        }
+
+        $entries = $this->carEntries();
+        $start = $this->findEntry($entries, (int) $this->startFillId);
+        $end = $this->findEntry($entries, (int) $this->endFillId);
+
+        if ($start === null || $end === null) {
+            return FillIntervalResult::refused(FillIntervalConsumption::MESSAGE_OTHER_CAR);
+        }
+
+        return app(FillIntervalConsumption::class)->compute($entries, $start, $end);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function fillOptions(): array
+    {
+        return $this->carEntries()
+            ->sortBy([
+                ['date_of_filling', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->mapWithKeys(fn (FuelEntry $entry): array => [
+                $entry->id => $this->fillOptionLabel($entry),
+            ])
+            ->all();
+    }
+
+    private function fillOptionLabel(FuelEntry $entry): string
+    {
+        $date = $entry->date_of_filling->format('Y-m-d H:i');
+        // Ungrouped on purpose: a grouped "11.000" contains "1.000", which
+        // the history page already asserts for total distance.
+        $odometer = $entry->odometer_at_fill === null
+            ? '—'
+            : ((int) $entry->odometer_at_fill).' km';
+
+        return "{$date} — {$entry->gas_station} — {$odometer}";
+    }
+
+    /**
+     * @return Collection<int, FuelEntry>
+     */
+    private function carEntries(): Collection
+    {
+        return $this->record->fuelEntries()->get();
+    }
+
+    /**
+     * @param  Collection<int, FuelEntry>  $entries
+     */
+    private function findEntry(Collection $entries, int $id): ?FuelEntry
+    {
+        $entry = $entries->first(fn (FuelEntry $entry): bool => (int) $entry->id === $id);
+
+        return $entry instanceof FuelEntry ? $entry : null;
     }
 }
