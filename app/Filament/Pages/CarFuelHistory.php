@@ -2,6 +2,10 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Widgets\CarAnalyticsWidget;
+use App\Filament\Widgets\CarFuelSummaryStatsWidget;
+use App\Filament\Widgets\CarFuelTypeBreakdownWidget;
+use App\Filament\Widgets\CarStationBreakdownWidget;
 use App\Models\Car;
 use App\Models\FuelEntry;
 use App\Services\Data\FillIntervalResult;
@@ -11,6 +15,9 @@ use App\Services\FuelStretchService;
 use BackedEnum;
 use Filament\Forms\Components\Select;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Callout;
+use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -19,6 +26,9 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+use Filament\Widgets\Widget;
+use Filament\Widgets\WidgetConfiguration;
 use Illuminate\Support\Collection;
 
 class CarFuelHistory extends Page implements HasTable
@@ -28,8 +38,6 @@ class CarFuelHistory extends Page implements HasTable
     protected static ?string $slug = 'cars/{record}/fuel-history';
 
     protected static bool $shouldRegisterNavigation = false;
-
-    protected string $view = 'filament.pages.car-fuel-history';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTableCells;
 
@@ -49,21 +57,44 @@ class CarFuelHistory extends Page implements HasTable
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<class-string<Widget> | WidgetConfiguration>
      */
-    protected function getViewData(): array
+    protected function getHeaderWidgets(): array
     {
         return [
-            'interval' => $this->fillInterval(),
+            CarFuelSummaryStatsWidget::class,
+            CarStationBreakdownWidget::class,
+            CarFuelTypeBreakdownWidget::class,
+            CarAnalyticsWidget::class,
         ];
     }
 
-    public function intervalForm(Schema $schema): Schema
+    /**
+     * @return array<string, int | null>
+     */
+    public function getHeaderWidgetsColumns(): array
+    {
+        return [
+            'default' => 1,
+            'md' => 2,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getWidgetData(): array
+    {
+        return [
+            'car' => $this->record,
+        ];
+    }
+
+    public function content(Schema $schema): Schema
     {
         return $schema
             ->components([
-                Section::make('Average consumption between two fills')
-                    ->description('Litres from every fill after the start fill through the end fill, over the kilometres between the two odometer readings.')
+                Section::make('Average consumption')
                     ->schema([
                         Select::make('startFillId')
                             ->label('Start fill')
@@ -75,11 +106,27 @@ class CarFuelHistory extends Page implements HasTable
                             ->options(fn (): array => $this->fillOptions())
                             ->placeholder('Select a fill')
                             ->live(),
+                        Callout::make(fn (): string => (string) $this->fillInterval()?->message)
+                            ->color('danger')
+                            ->columnSpanFull()
+                            ->visible(fn (): bool => filled($this->fillInterval()?->message)),
+                        Grid::make([
+                            'default' => 1,
+                            'sm' => 3,
+                        ])
+                            ->schema([
+                                Stat::make('Litres', fn (): string => $this->formatInterval('litres', 3)),
+                                Stat::make('Kilometres', fn (): string => $this->formatInterval('kilometres', 0)),
+                                Stat::make('L/100km', fn (): string => $this->formatInterval('l100km', 2)),
+                            ])
+                            ->columnSpanFull()
+                            ->visible(fn (): bool => $this->fillIntervalHasFigures()),
                     ])
                     ->columns([
                         'default' => 1,
                         'md' => 2,
                     ]),
+                EmbeddedTable::make(),
             ]);
     }
 
@@ -161,6 +208,38 @@ class CarFuelHistory extends Page implements HasTable
     }
 
     private function fillInterval(): ?FillIntervalResult
+    {
+        return once(function (): ?FillIntervalResult {
+            return $this->resolveFillInterval();
+        });
+    }
+
+    private function fillIntervalHasFigures(): bool
+    {
+        $interval = $this->fillInterval();
+
+        return $interval !== null && $interval->message === null;
+    }
+
+    private function formatInterval(string $figure, int $decimals): string
+    {
+        $interval = $this->fillInterval();
+
+        if ($interval === null || $interval->message !== null) {
+            return '—';
+        }
+
+        $value = match ($figure) {
+            'litres' => $interval->litres,
+            'kilometres' => $interval->kilometres,
+            'l100km' => $interval->l100km,
+            default => null,
+        };
+
+        return number_format((float) $value, $decimals, ',', '.');
+    }
+
+    private function resolveFillInterval(): ?FillIntervalResult
     {
         if (blank($this->startFillId) || blank($this->endFillId)) {
             return null;

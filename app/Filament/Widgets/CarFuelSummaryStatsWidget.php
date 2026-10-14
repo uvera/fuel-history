@@ -9,6 +9,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class CarFuelSummaryStatsWidget extends StatsOverviewWidget
 {
+    protected static bool $isLazy = false;
+
     public Car $car;
 
     public function mount(Car $car): void

@@ -12,6 +12,10 @@ use Filament\Widgets\TableWidget;
 
 class CarAnalyticsWidget extends TableWidget
 {
+    protected static bool $isLazy = false;
+
+    protected int|string|array $columnSpan = 'full';
+
     public Car $car;
 
     public function mount(Car $car): void

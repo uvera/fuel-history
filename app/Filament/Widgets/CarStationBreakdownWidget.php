@@ -10,6 +10,8 @@ use Filament\Widgets\TableWidget;
 
 class CarStationBreakdownWidget extends TableWidget
 {
+    protected static bool $isLazy = false;
+
     public Car $car;
 
     public function mount(Car $car): void
