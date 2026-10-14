@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Models\FuelEntry;
+use App\Services\FuelCatalog;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Arr;
@@ -61,7 +62,11 @@ class EditFuelEntryTool extends Tool
         }
 
         unset($validated['entry_id']);
-        $entry->update($validated);
+        $entry->fill($validated);
+        // Resolve against the names now on the entry, so a station change
+        // moves the variant onto that station instead of keeping the old one.
+        app(FuelCatalog::class)->classifyEntry($entry);
+        $entry->save();
 
         return Response::text("Fuel entry #{$entry->id} updated.");
     }

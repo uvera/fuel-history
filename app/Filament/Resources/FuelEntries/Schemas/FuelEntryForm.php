@@ -4,12 +4,17 @@ namespace App\Filament\Resources\FuelEntries\Schemas;
 
 use App\Models\Car;
 use App\Models\FuelEntry;
+use App\Models\FuelStation;
+use App\Models\FuelVariant;
+use App\Services\FuelCatalog;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 
 class FuelEntryForm
 {
@@ -23,11 +28,55 @@ class FuelEntryForm
                     ->searchable()
                     ->required()
                     ->live(),
-                TextInput::make('fuel_variant')
+                Select::make('fuel_station_id')
+                    ->label('Gas station')
+                    ->relationship('fuelStation', 'name')
+                    ->searchable()
+                    ->preload()
+                    ->required()
+                    ->live()
+                    ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
+                        $variantId = $get('fuel_variant_id');
+
+                        if (blank($variantId)) {
+                            return;
+                        }
+
+                        if (blank($state)) {
+                            $set('fuel_variant_id', null);
+
+                            return;
+                        }
+
+                        $belongsToStation = FuelVariant::query()
+                            ->whereKey($variantId)
+                            ->where('fuel_station_id', $state)
+                            ->exists();
+
+                        if (! $belongsToStation) {
+                            $set('fuel_variant_id', null);
+                        }
+                    })
+                    ->createOptionForm([
+                        TextInput::make('name')
+                            ->label('Station name')
+                            ->required()
+                            ->maxLength(255),
+                    ])
+                    ->createOptionUsing(function (array $data): int {
+                        return app(FuelCatalog::class)->findOrCreateStation($data['name'])->getKey();
+                    }),
+                Select::make('fuel_variant_id')
                     ->label('Fuel variant')
                     ->helperText('The specific grade or product, e.g. "95", "B7", "Shell V-Power".')
-                    ->maxLength(255)
-                    ->nullable()
+                    ->relationship(
+                        name: 'fuelVariant',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: fn (Builder $query, Get $get) => $query->where('fuel_station_id', $get('fuel_station_id')),
+                    )
+                    ->searchable()
+                    ->preload()
+                    ->disabled(fn (Get $get): bool => blank($get('fuel_station_id')))
                     ->required(function (Get $get): bool {
                         $carId = $get('car_id');
 
@@ -38,10 +87,18 @@ class FuelEntryForm
                         return FuelEntry::fuelVariantIsRequired(
                             Car::query()->find($carId)?->fuel_type,
                         );
+                    })
+                    ->createOptionForm([
+                        TextInput::make('name')
+                            ->label('Variant')
+                            ->required()
+                            ->maxLength(255),
+                    ])
+                    ->createOptionUsing(function (array $data, Get $get): int {
+                        $station = FuelStation::query()->findOrFail($get('fuel_station_id'));
+
+                        return app(FuelCatalog::class)->findOrCreateVariant($station, $data['name'])->getKey();
                     }),
-                TextInput::make('gas_station')
-                    ->required()
-                    ->maxLength(255),
                 TextInput::make('litres_filled')
                     ->label('Litres filled')
                     ->numeric()

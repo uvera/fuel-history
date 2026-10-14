@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable([
     'car_id',
     'user_id',
+    'fuel_station_id',
+    'fuel_variant_id',
     'fuel_variant',
     'gas_station',
     'litres_filled',
@@ -29,6 +31,8 @@ class FuelEntry extends Model
     protected function casts(): array
     {
         return [
+            'fuel_station_id' => 'integer',
+            'fuel_variant_id' => 'integer',
             'litres_filled' => 'decimal:3',
             'amount' => 'decimal:2',
             'odometer_at_fill' => 'integer',
@@ -46,6 +50,16 @@ class FuelEntry extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function fuelStation()
+    {
+        return $this->belongsTo(FuelStation::class);
+    }
+
+    public function fuelVariant()
+    {
+        return $this->belongsTo(FuelVariant::class);
     }
 
     /**

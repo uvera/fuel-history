@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\FuelType;
 use App\Models\Car;
 use App\Models\FuelEntry;
+use App\Models\FuelStation;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,18 +37,33 @@ class FuelEntryValidationRulesTest extends TestCase
         $this->assertTrue(Schema::hasColumn('fuel_entries', 'fuel_variant'));
         $this->assertTrue(Schema::hasColumn('cars', 'fuel_type'));
 
+        $stationColumn = collect(Schema::getColumns('fuel_entries'))->firstWhere('name', 'fuel_station_id');
+        $this->assertFalse($stationColumn['nullable']);
+        $variantColumn = collect(Schema::getColumns('fuel_entries'))->firstWhere('name', 'fuel_variant_id');
+        $this->assertTrue($variantColumn['nullable']);
+
+        $foreignKeys = collect(Schema::getForeignKeys('fuel_entries'));
+        $stationKey = $foreignKeys->first(fn (array $key): bool => in_array('fuel_station_id', $key['columns'], true));
+        $variantKey = $foreignKeys->first(fn (array $key): bool => in_array('fuel_variant_id', $key['columns'], true));
+        $this->assertNotNull($stationKey);
+        $this->assertNotNull($variantKey);
+        $this->assertSame('restrict', $stationKey['on_delete']);
+        $this->assertSame('restrict', $variantKey['on_delete']);
+
         $column = collect(Schema::getColumns('cars'))->firstWhere('name', 'fuel_type');
         $this->assertFalse($column['nullable']);
         $this->assertNull($column['default']);
 
         $car = Car::factory()->create();
         $userId = User::factory()->create()->id;
+        $station = FuelStation::factory()->create(['name' => 'Legacy Station']);
 
         // Raw insert bypassing the model/validation layer entirely --
         // proves the DB itself does not enforce NOT NULL on fuel_variant.
         DB::table('fuel_entries')->insert([
             'car_id' => $car->id,
             'user_id' => $userId,
+            'fuel_station_id' => $station->id,
             'fuel_variant' => null,
             'gas_station' => 'Legacy Station',
             'litres_filled' => 10,

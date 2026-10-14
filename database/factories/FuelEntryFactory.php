@@ -6,6 +6,7 @@ use App\Enums\FuelType;
 use App\Models\Car;
 use App\Models\FuelEntry;
 use App\Models\User;
+use App\Services\FuelCatalog;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -40,15 +41,19 @@ class FuelEntryFactory extends Factory
     public function configure(): static
     {
         return $this->afterMaking(function (FuelEntry $entry): void {
-            if ($entry->car_id === null) {
+            if ($entry->car_id !== null) {
+                $car = Car::query()->find($entry->car_id);
+
+                if ($car?->fuel_type === FuelType::Electric) {
+                    $entry->fuel_variant = null;
+                }
+            }
+
+            if (blank($entry->gas_station)) {
                 return;
             }
 
-            $car = Car::query()->find($entry->car_id);
-
-            if ($car?->fuel_type === FuelType::Electric) {
-                $entry->fuel_variant = null;
-            }
+            app(FuelCatalog::class)->classifyEntry($entry);
         });
     }
 

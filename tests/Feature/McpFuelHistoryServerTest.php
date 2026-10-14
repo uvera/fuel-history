@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Enums\FuelType;
 use App\Models\Car;
 use App\Models\FuelEntry;
+use App\Models\FuelStation;
+use App\Models\FuelVariant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
@@ -104,6 +106,9 @@ class McpFuelHistoryServerTest extends TestCase
         $this->assertSame($user->id, $entry->user_id);
         $this->assertSame($car->id, $entry->car_id);
         $this->assertSame('RSD', $entry->currency);
+        $this->assertSame('Test Station', $entry->fuelStation->name);
+        $this->assertSame('95', $entry->fuelVariant->name);
+        $this->assertSame($entry->fuel_station_id, $entry->fuelVariant->fuel_station_id);
     }
 
     public function test_add_fuel_entry_allows_omitting_odometer_at_fill(): void
@@ -424,5 +429,36 @@ class McpFuelHistoryServerTest extends TestCase
 
         $this->assertStringContainsString('lpg', $text);
         $this->assertStringContainsString('Autogas', $text);
+    }
+
+    public function test_edit_fuel_entry_moves_the_variant_onto_the_new_station(): void
+    {
+        $user = User::factory()->create();
+        $token = $this->tokenFor($user);
+        $originalStation = FuelStation::factory()->create(['name' => 'OMV']);
+        $originalVariant = FuelVariant::factory()->create([
+            'fuel_station_id' => $originalStation->id,
+            'name' => '95',
+        ]);
+        $entry = FuelEntry::factory()->create([
+            'user_id' => $user->id,
+            'gas_station' => 'OMV',
+            'fuel_variant' => '95',
+        ]);
+        $this->assertSame($originalVariant->id, $entry->fuel_variant_id);
+
+        $response = $this->callTool($token, 'edit-fuel-entry', [
+            'entry_id' => $entry->id,
+            'gas_station' => 'NIS',
+        ]);
+
+        $response->assertOk();
+        $this->assertFalse((bool) $response->json('result.isError'));
+        $entry->refresh();
+        $this->assertSame('NIS', $entry->gas_station);
+        $this->assertSame('95', $entry->fuel_variant);
+        $this->assertNotSame($originalStation->id, $entry->fuel_station_id);
+        $this->assertNotSame($originalVariant->id, $entry->fuel_variant_id);
+        $this->assertSame($entry->fuel_station_id, $entry->fuelVariant->fuel_station_id);
     }
 }

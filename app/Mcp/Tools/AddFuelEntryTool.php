@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Models\FuelEntry;
+use App\Services\FuelCatalog;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
@@ -23,12 +24,14 @@ class AddFuelEntryTool extends Tool
             $validated['fuel_variant'] = null;
         }
 
-        $entry = FuelEntry::create([
+        $entry = new FuelEntry([
             ...$validated,
             // The token owner is always the entry's owner -- never a tool
             // input, same discipline as the Filament form.
             'user_id' => $request->user()->id,
         ]);
+        app(FuelCatalog::class)->classifyEntry($entry);
+        $entry->save();
 
         return Response::text(json_encode([
             'id' => $entry->id,
